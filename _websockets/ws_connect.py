@@ -1,11 +1,11 @@
-import rnet
 import json
 import asyncio
 import traceback
 import random
 from typing import Dict, Optional, Callable, Awaitable
 from dataclasses import dataclass
-from rnet import WebSocket, Message
+import websockets
+from websockets.asyncio.client import connect as ws_connect
 from loguru import logger
 from localization import t
 
@@ -24,7 +24,7 @@ class KickWebSocket:
         proxy: Optional[str] = None,
         on_disconnect: Optional[Callable[[], Awaitable]] = None,
     ):
-        self.ws: Optional[WebSocket] = None
+        self.ws = None
         self.data = data
         self.proxy = proxy
         self.on_disconnect = on_disconnect
@@ -50,25 +50,41 @@ class KickWebSocket:
             )
 
             ws_kwargs = dict(
-                url=ws_url,
-                read_buffer_size=4096,
-                write_buffer_size=4096,
-                max_message_size=4096,
+                max_size=4096,
+                additional_headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Safari/537.36"
+                    ),
+                },
             )
 
-            # Пробуем с прокси
             if self.proxy:
-                ws_kwargs["proxy"] = self.proxy
+                try:
+                    from websockets.extensions import permessage_deflate  # noqa: F401
+                    import python_socks  # noqa: F401
+                    from python_socks.async_.asyncio import Proxy
 
-            try:
-                self.ws = await rnet.websocket(**ws_kwargs)
-            except TypeError:
-                if self.proxy:
-                    logger.warning(
-                        "rnet.websocket no longer supports proxy"
+                    proxy = Proxy.from_url(self.proxy)
+                    sock = await proxy.connect(
+                        dest_host="websockets.kick.com", dest_port=443
                     )
-                ws_kwargs.pop("proxy", None)
-                self.ws = await rnet.websocket(**ws_kwargs)
+                    ws_kwargs["sock"] = sock
+                    ws_kwargs["server_hostname"] = "websockets.kick.com"
+                except ImportError:
+                    logger.warning(
+                        "python-socks not installed; "
+                        "connecting without proxy. "
+                        "Install with: pip install python-socks[asyncio]"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Proxy connection failed ({e}); "
+                        "falling back to direct connection"
+                    )
+
+            self.ws = await ws_connect(ws_url, **ws_kwargs)
 
             logger.success(t("websocket_connected"))
             self.state.is_connected = True
@@ -141,6 +157,12 @@ class KickWebSocket:
                 await self._handle_message(message)
         except asyncio.CancelledError:
             pass
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.error(t(
+                "message_listening_error", error=str(e)
+            ))
+            self.state.is_connected = False
+            await self._handle_reconnection()
         except Exception as e:
             logger.error(t(
                 "message_listening_error", error=str(e)
@@ -150,12 +172,8 @@ class KickWebSocket:
 
     async def _handle_message(self, message):
         try:
-            if isinstance(message, Message):
-                msg = (
-                    message.text
-                    if hasattr(message, "text")
-                    else str(message)
-                )
+            if isinstance(message, (bytes, bytearray)):
+                msg = message.decode("utf-8", errors="ignore")
             else:
                 msg = str(message)
 
@@ -273,7 +291,7 @@ class KickWebSocket:
         }
         try:
             await self.ws.send(
-                Message.from_text(json.dumps(payload))
+                json.dumps(payload)
             )
             logger.debug(t(
                 "sent_handshake",
@@ -290,7 +308,7 @@ class KickWebSocket:
             return
         try:
             await self.ws.send(
-                Message.from_text(json.dumps({"type": "ping"}))
+                json.dumps({"type": "ping"})
             )
             logger.debug(t("sent_ping"))
         except Exception as e:
@@ -302,7 +320,7 @@ class KickWebSocket:
             return
         try:
             await self.ws.send(
-                Message.from_text(json.dumps({"type": "pong"}))
+                json.dumps({"type": "pong"})
             )
         except Exception:
             pass
@@ -326,7 +344,7 @@ class KickWebSocket:
         }
         try:
             await self.ws.send(
-                Message.from_text(json.dumps(payload))
+                json.dumps(payload)
             )
             logger.debug(t(
                 "sent_user_event",
