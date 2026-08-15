@@ -97,9 +97,9 @@ class KickUtility:
 
     def _safe_get(self, data, *keys):
         """
-        Безопасное извлечение вложенных ключей из dict.
-        _safe_get(data, "data", "id") → data["data"]["id"] или None
-        Не падает на None, int, str, list.
+        Safely extract nested keys from a dict.
+        _safe_get(data, "data", "id") → data["data"]["id"] or None
+        Never raises on None, int, str, list.
         """
         current = data
         for key in keys:
@@ -129,7 +129,7 @@ class KickUtility:
                     "livestream_403",
                     username=self.username
                 ))
-                # Не возвращаем None сразу — пробуем endpoint 2
+                # Don't return None yet — try the fallback endpoint
             elif resp.status_code == 200:
                 data = self._parse_response(resp)
                 if data is not None:
@@ -176,7 +176,7 @@ class KickUtility:
         return stream_id
 
     def _get_stream_id_from_channel(self, token: str) -> int | None:
-        """Альтернативный метод через основной channel API"""
+        """Alternative method via the main channel API"""
         self.session.headers["Authorization"] = f"Bearer {token}"
 
         try:
@@ -204,7 +204,7 @@ class KickUtility:
             if data is None:
                 return None
 
-            # Пробуем все известные пути
+            # Try all known response paths
             stream_id = (
                 self._safe_get(data, "data", "livestream", "id")
                 or self._safe_get(data, "livestream", "id")

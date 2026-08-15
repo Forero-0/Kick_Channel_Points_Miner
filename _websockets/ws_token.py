@@ -70,10 +70,7 @@ class KickPoints:
                     cookies=dict(self.session.cookies),
                 ))
             elif response.status_code == 403:
-                logger.error(
-                    "403 при инициализации — "
-                    "IP заблокирован или нужен другой прокси"
-                )
+                logger.error(t("init_403_error"))
             else:
                 logger.error(t(
                     "failed_bypass", status=response.status_code
@@ -97,7 +94,7 @@ class KickPoints:
             ))
 
     def _reinitialize_session(self):
-        logger.warning("Переинициализация сессии ws_token...")
+        logger.warning(t("reinitializing_session"))
         self._initialized = False
         self._ensure_session()
 
@@ -131,7 +128,7 @@ class KickPoints:
         self._ensure_session()
 
         try:
-            # Шаг 1: Данные канала
+            # Step 1: Channel data
             logger.info(t(
                 "getting_channel_data", streamer=streamer_name
             ))
@@ -151,11 +148,11 @@ class KickPoints:
             status = channel_response.status_code
             logger.debug(t("channel_api_status", status=status))
 
-            # Обработка 403 с retry
+            # Handle 403 with a retry after reinitializing the session
             if status == 403:
-                logger.warning(
-                    f"403 для {streamer_name} — переинициализация"
-                )
+                logger.warning(t(
+                    "retry_403_for_streamer", streamer=streamer_name
+                ))
                 self._reinitialize_session()
 
                 channel_response = self.session.get(
@@ -166,9 +163,9 @@ class KickPoints:
                 status = channel_response.status_code
 
                 if status == 403:
-                    logger.error(
-                        f"Повторный 403 для {streamer_name}"
-                    )
+                    logger.error(t(
+                        "repeated_403_for_streamer", streamer=streamer_name
+                    ))
                     return None
 
             if status != 200:
@@ -181,7 +178,7 @@ class KickPoints:
             if not channel_data:
                 return None
 
-            # Определяем структуру
+            # Determine the response structure
             if "data" in channel_data and isinstance(
                 channel_data["data"], dict
             ):
@@ -214,7 +211,7 @@ class KickPoints:
 
             time.sleep(random.uniform(0.5, 1.5))
 
-            # Шаг 2: WS Token
+            # Step 2: WS Token
             ws_headers = {
                 "Referer": f"https://kick.com/{streamer_name}/",
                 "Origin": "https://kick.com",
@@ -236,9 +233,9 @@ class KickPoints:
             ))
 
             if ws_status == 403:
-                logger.error(
-                    f"403 при WS-токене для {streamer_name}"
-                )
+                logger.error(t(
+                    "ws_token_403", streamer=streamer_name
+                ))
                 return None
 
             if ws_status != 200:
@@ -251,7 +248,7 @@ class KickPoints:
             if not ws_data:
                 return None
 
-            # Извлекаем токен из разных форматов
+            # Extract the token from different response formats
             ws_token = (
                 self._safe_get(ws_data, "data", "token")
                 or self._safe_get(ws_data, "data", "websocket_token")

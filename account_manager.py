@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass, field
 from loguru import logger
 
+from localization import t
 from _websockets.ws_token import KickPoints
 from _websockets.ws_connect import KickWebSocket
 from utils.kick_utility import KickUtility
@@ -117,12 +118,13 @@ class AccountWorker:
 
     async def start(self):
         self._running = True
-        logger.info(
-            f"[{self.alias}] Запуск: "
-            f"{len(self.state.streamers)} стримеров, "
-            f"лимит={self.max_concurrent}, "
-            f"proxy={'да' if self.proxy else 'нет'}"
-        )
+        logger.info(t(
+            "worker_starting",
+            alias=self.alias,
+            count=len(self.state.streamers),
+            limit=self.max_concurrent,
+            proxy=t("yes") if self.proxy else t("no"),
+        ))
 
         try:
             await self._check_all_online()
@@ -138,9 +140,9 @@ class AccountWorker:
                 await self._rebalance()
 
         except asyncio.CancelledError:
-            logger.info(f"[{self.alias}] Worker отменён")
+            logger.info(t("worker_cancelled", alias=self.alias))
         except Exception as e:
-            logger.error(f"[{self.alias}] Worker упал: {e}")
+            logger.error(t("worker_crashed", alias=self.alias, error=e))
         finally:
             await self.stop()
 
@@ -158,10 +160,11 @@ class AccountWorker:
                 st.stream_id = stream_id
 
                 if not was_online and st.is_online:
-                    logger.info(
-                        f"[{self.alias}] 🟢 {name} "
-                        f"ОНЛАЙН (stream={stream_id})"
-                    )
+                    logger.info(t(
+                        "streamer_online",
+                        alias=self.alias, streamer=name,
+                        stream_id=stream_id,
+                    ))
                     if self._discord:
                         self._discord.send_streamer_online(
                             self.alias, name,
@@ -169,9 +172,10 @@ class AccountWorker:
                         )
 
                 elif was_online and not st.is_online:
-                    logger.info(
-                        f"[{self.alias}] 🔴 {name} ОФФЛАЙН"
-                    )
+                    logger.info(t(
+                        "streamer_offline",
+                        alias=self.alias, streamer=name,
+                    ))
                     if self._discord:
                         self._discord.send_streamer_online(
                             self.alias, name,
@@ -179,17 +183,18 @@ class AccountWorker:
                         )
 
                 elif not st.is_online:
-                    logger.debug(
-                        f"[{self.alias}] ⚫ {name} оффлайн "
-                        f"(stream_id=None)"
-                    )
+                    logger.debug(t(
+                        "streamer_offline_debug",
+                        alias=self.alias, streamer=name,
+                    ))
 
                 await asyncio.sleep(random.uniform(1.0, 2.5))
 
             except Exception as e:
-                logger.warning(
-                    f"[{self.alias}] Ошибка проверки {name}: {e}"
-                )
+                logger.warning(t(
+                    "error_checking_streamer",
+                    alias=self.alias, streamer=name, error=e,
+                ))
 
     async def _rebalance(self):
         async with self._rebalance_lock:
@@ -210,20 +215,16 @@ class AccountWorker:
 
             to_stop = current - desired
             for name in to_stop:
-                reason = (
-                    "оффлайн"
-                    if not self.state.streamers[name].is_online
-                    else "вытеснен приоритетом"
-                )
-                logger.info(
-                    f"[{self.alias}] ⏹ {name} — {reason}"
-                )
+                is_offline = not self.state.streamers[name].is_online
+                reason_key = "reason_offline" if is_offline else "reason_displaced"
+                reason = t(reason_key)
+                logger.info(t(
+                    "streamer_stopped_reason",
+                    alias=self.alias, streamer=name, reason=reason,
+                ))
                 await self._stop_streamer(name)
 
-                if (
-                    self._discord
-                    and reason == "вытеснен приоритетом"
-                ):
+                if self._discord and reason_key == "reason_displaced":
                     self._discord.send_streamer_online(
                         self.alias, name,
                         self.state.streamers[name].priority,
@@ -233,10 +234,10 @@ class AccountWorker:
             to_start = desired - current
             for name in to_start:
                 pri = self.state.streamers[name].priority
-                logger.info(
-                    f"[{self.alias}] ▶ {name} "
-                    f"(приоритет={pri})"
-                )
+                logger.info(t(
+                    "streamer_starting_priority",
+                    alias=self.alias, streamer=name, priority=pri,
+                ))
                 await self._start_streamer(name)
 
                 if self._discord:
@@ -251,12 +252,13 @@ class AccountWorker:
                 )
 
             if desired:
-                logger.info(
-                    f"[{self.alias}] Активны: "
-                    f"{sorted(desired)} "
-                    f"({len(desired)}/{self.max_concurrent})"
-                )
-
+                logger.info(t(
+                    "worker_active_summary",
+                    alias=self.alias,
+                    streamers=sorted(desired),
+                    count=len(desired),
+                    limit=self.max_concurrent,
+                ))
 
     async def _start_streamer(self, name: str):
         st = self.state.streamers[name]
@@ -269,23 +271,22 @@ class AccountWorker:
                 )
                 if not st.channel_id:
                     raise RuntimeError(
-                        f"Не удалось получить channel_id "
-                        f"для {name}"
+                        t("failed_get_channel_id_for", streamer=name)
                     )
 
             ws_token_getter = self._get_ws_token_getter()
             ws_token = ws_token_getter.get_ws_token(name)
             if not ws_token:
                 raise RuntimeError(
-                    f"Не удалось получить WS-токен для {name}"
+                    t("failed_get_ws_token_for", streamer=name)
                 )
 
             async def on_disconnect():
                 st.is_watching = False
-                logger.warning(
-                    f"[{self.alias}] WS {name} "
-                    f"окончательно отключился"
-                )
+                logger.warning(t(
+                    "streamer_disconnected_final",
+                    alias=self.alias, streamer=name,
+                ))
 
             ws_client = KickWebSocket(
                 data={
@@ -318,14 +319,15 @@ class AccountWorker:
             except Exception:
                 pass
 
-            logger.success(
-                f"[{self.alias}] ✅ Смотрим {name}"
-            )
+            logger.success(t(
+                "now_watching", alias=self.alias, streamer=name,
+            ))
 
         except Exception as e:
-            logger.error(
-                f"[{self.alias}] Ошибка запуска {name}: {e}"
-            )
+            logger.error(t(
+                "error_starting_streamer",
+                alias=self.alias, streamer=name, error=e,
+            ))
             st.error_count += 1
             st.last_error = str(e)
             st.is_watching = False
@@ -356,7 +358,7 @@ class AccountWorker:
         st.ws_client = None
         st.ws_task = None
         st.points_task = None
-        logger.info(f"[{self.alias}] ⏹ {name} остановлен")
+        logger.info(t("streamer_stopped", alias=self.alias, streamer=name))
 
     async def _ws_wrapper(
         self, name: str, ws_client: KickWebSocket
@@ -364,9 +366,9 @@ class AccountWorker:
         try:
             await ws_client.connect()
         except Exception as e:
-            logger.error(
-                f"[{self.alias}] WS {name} упал: {e}"
-            )
+            logger.error(t(
+                "ws_crashed", alias=self.alias, streamer=name, error=e,
+            ))
         finally:
             self.state.streamers[name].is_watching = False
 
@@ -390,10 +392,11 @@ class AccountWorker:
 
                 if amount > old:
                     gain = amount - old
-                    logger.success(
-                        f"[{self.alias}] 💰 {name}: "
-                        f"+{gain} (Всего: {amount})"
-                    )
+                    logger.success(t(
+                        "points_gain",
+                        alias=self.alias, streamer=name,
+                        gain=gain, amount=amount,
+                    ))
 
                     if self._discord:
                         self._discord.send_points_update(
@@ -403,10 +406,10 @@ class AccountWorker:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(
-                    f"[{self.alias}] Ошибка поинтов "
-                    f"{name}: {e}"
-                )
+                logger.error(t(
+                    "points_error_for",
+                    alias=self.alias, streamer=name, error=e,
+                ))
 
     async def stop(self):
         self._running = False
@@ -427,7 +430,7 @@ class AccountWorker:
             u.close()
         self._utility_cache.clear()
 
-        logger.info(f"[{self.alias}] Worker остановлен")
+        logger.info(t("worker_stopped", alias=self.alias))
 
     def get_status(self) -> dict:
         return {
@@ -475,7 +478,7 @@ class AccountManager:
         stagger_min = config.get("Connection_stagger_min", 3)
         stagger_max = config.get("Connection_stagger_max", 8)
 
-        # Обратная совместимость
+        # Backward compatibility with the old single-account config format
         accounts = config.get("Accounts", [])
         if not accounts:
             old_token = config.get(
@@ -490,10 +493,7 @@ class AccountManager:
                     "streamers": old_streamers,
                     "max_concurrent": old_max,
                 }]
-                logger.warning(
-                    "⚠️ Старый формат конфига. "
-                    "Переведите на Accounts[]."
-                )
+                logger.warning(t("legacy_config_warning"))
 
         for acc in accounts:
             self.workers.append(
@@ -507,30 +507,29 @@ class AccountManager:
                 )
             )
 
-        logger.info(
-            f"📊 Загружено аккаунтов: {len(self.workers)}, "
-            f"глобальный прокси: "
-            f"{'да' if global_proxy else 'нет'}"
-        )
+        logger.info(t(
+            "accounts_loaded",
+            count=len(self.workers),
+            proxy=t("yes") if global_proxy else t("no"),
+        ))
 
     def set_discord(self, discord: "DiscordWebhook"):
-        """Подключить Discord webhook ко всем аккаунтам"""
+        """Attach a Discord webhook to every account worker."""
         self._discord = discord
         for worker in self.workers:
             worker.set_discord(discord)
-        logger.info(
-            f"🟣 Discord webhook подключён к "
-            f"{len(self.workers)} аккаунтам"
-        )
+        logger.info(t(
+            "discord_connected_accounts", count=len(self.workers),
+        ))
 
     async def start_all(self):
         for i, worker in enumerate(self.workers):
             if i > 0:
                 delay = random.uniform(5, 15)
-                logger.info(
-                    f"⏳ Задержка {delay:.0f}с перед "
-                    f"аккаунтом [{worker.alias}]"
-                )
+                logger.info(t(
+                    "delay_before_account",
+                    delay=f"{delay:.0f}", alias=worker.alias,
+                ))
                 await asyncio.sleep(delay)
 
             task = asyncio.create_task(worker.start())

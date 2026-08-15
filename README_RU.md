@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-> [🇬🇧 **Read in English**](README.md)
+> [🇬🇧 **Read in English**](README.md) • [🇪🇸 **Leer en español**](README_es.md)
 
 Мощный асинхронный бот для автоматического фарма поинтов каналов на **Kick.com**. Поддержка мультиаккаунтов, система приоритетов, SOCKS5 прокси, современный Web Dashboard и управление через Telegram.
 
@@ -81,7 +81,7 @@
     "color_warning": 16763904,
     "color_error": 15746887
   },
-  
+
   "Proxy": {
     "enabled": false,
     "url": "socks5://user:password@host:port"
@@ -244,7 +244,7 @@ python main.py
 ```
 
 | Parameter | Description |
-| :--- | :--- | 
+| :--- | :--- |
 | `webhook_url` | URL вебхука Discord |
 | `username` | Имя бота в Discord |
 | `avatar_url` | 	URL аватара (опционально) |
@@ -355,7 +355,7 @@ docker run -d \
 docker compose up -d
 ```
 
-Остановить: `docker compose down`  
+Остановить: `docker compose down`
 Посмотреть логи: `docker compose logs -f`
 
 ---

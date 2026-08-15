@@ -3,6 +3,7 @@ import json
 from flask import Flask, render_template_string, jsonify
 from loguru import logger
 from datetime import datetime
+from localization import t
 
 data_lock = threading.Lock()
 _account_manager = None
@@ -766,7 +767,7 @@ def start_server(streamers_data, port=5000):
     def run():
         import logging
         logging.getLogger('werkzeug').setLevel(logging.ERROR)
-        logger.info(f"🌍 Web Dashboard available at http://localhost:{port}")
+        logger.info(t("web_dashboard_available", url=f"http://localhost:{port}"))
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
     threading.Thread(target=run, daemon=True).start()

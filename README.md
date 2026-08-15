@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-> [🇷🇺 **Читать на русском языке**](README_RU.md)
+> [🇷🇺 **Читать на русском языке**](README_RU.md) • [🇪🇸 **Leer en español**](README_es.md)
 
 A powerful, asynchronous bot for automatically farming channel points on **Kick.com**. Features a modern Web Dashboard, advanced Telegram control, and Cloudflare protection bypass.
 
@@ -22,7 +22,7 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
     *   **Multi-Account Views:** `/status`, `/balance`, `/accounts` commands show data per account.
     *   **Live Notifications:** Updates on points farmed and errors.
     *   **Remote Control:** Restart the miner via Telegram.
-*   **🌐 Multi-language:** Support for English and Russian.
+*   **🌐 Multi-language:** Support for English, Russian and Spanish.
 *   **📉 Smart Logging:** Clean console output with optional Debug mode.
 *   **♻️ Memory-Safe:** Sessions are reused and properly closed – no memory leaks during long runs.
 
@@ -81,7 +81,7 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
     "color_warning": 16763904,
     "color_error": 15746887
   },
-  
+
   "Proxy": {
     "enabled": false,
     "url": "socks5://user:password@host:port"
@@ -242,7 +242,7 @@ Send real-time notifications to any Discord channel via webhooks – no bot requ
 ```
 
 | Parameter | Description |
-| :--- | :--- | 
+| :--- | :--- |
 | `webhook_url` | Discord webhook URL |
 | `username` | Bot display name in Discord |
 | `avatar_url` | Custom avatar URL (optional) |
@@ -353,7 +353,7 @@ Dashboard → **http://localhost:5000**
 docker compose up -d
 ```
 
-To stop: `docker compose down`  
+To stop: `docker compose down`
 View logs: `docker compose logs -f`
 
 ---

@@ -8,7 +8,7 @@ from localization import t
 
 class PointsAmount:
     """
-    Один экземпляр на аккаунт. Сессия переиспользуется.
+    One instance per account. The session is reused across calls.
     """
 
     def __init__(self, proxy: str = None):
@@ -48,7 +48,7 @@ class PointsAmount:
         try:
             resp = self.session.get("https://kick.com", timeout=15)
             if resp.status_code == 200:
-                logger.debug("PointsAmount session OK")
+                logger.debug(t("points_session_ok"))
 
             for name, value in {
                 "showMatureContent": "true",
@@ -60,7 +60,7 @@ class PointsAmount:
             time.sleep(random.uniform(0.3, 1.0))
             self._initialized = True
         except Exception as e:
-            logger.error(f"PointsAmount init error: {e}")
+            logger.error(t("points_init_error", error=str(e)))
 
     def close(self):
         try:
@@ -93,25 +93,23 @@ class PointsAmount:
             )
 
             if resp.status_code == 403:
-                logger.warning(
-                    f"403 при получении поинтов {username}"
-                )
+                logger.warning(t("points_403_for", username=username))
                 return None
 
             if resp.status_code == 404:
                 return self._get_points_alt(username, token)
 
             if resp.status_code != 200:
-                logger.error(
-                    f"Points API {username}: {resp.status_code}"
-                )
+                logger.error(t(
+                    "points_api_error", username=username, status=resp.status_code
+                ))
                 return 0
 
             data = json.loads(
                 resp.content.decode("utf-8", errors="ignore")
             )
 
-            # Безопасное извлечение
+            # Safe extraction
             points = self._safe_get(data, "data", "points")
             if points is not None:
                 return points
@@ -123,7 +121,7 @@ class PointsAmount:
             return 0
 
         except Exception as e:
-            logger.error(f"Points error {username}: {e}")
+            logger.error(t("points_generic_error", username=username, error=str(e)))
             return None
 
     def _get_points_alt(self, username: str, token: str) -> int:

@@ -73,16 +73,11 @@ class KickWebSocket:
                     ws_kwargs["sock"] = sock
                     ws_kwargs["server_hostname"] = "websockets.kick.com"
                 except ImportError:
-                    logger.warning(
-                        "python-socks not installed; "
-                        "connecting without proxy. "
-                        "Install with: pip install python-socks[asyncio]"
-                    )
+                    logger.warning(t("proxy_socks_not_installed"))
                 except Exception as e:
-                    logger.warning(
-                        f"Proxy connection failed ({e}); "
-                        "falling back to direct connection"
-                    )
+                    logger.warning(t(
+                        "proxy_connection_failed", error=str(e)
+                    ))
 
             self.ws = await ws_connect(ws_url, **ws_kwargs)
 
@@ -247,7 +242,7 @@ class KickWebSocket:
                 5 * (2 ** (self.state.reconnect_attempts - 1)),
                 120,
             )
-            logger.info(f"Reconnect delay: {delay}s")
+            logger.info(t("reconnect_delay", delay=delay))
             await asyncio.sleep(delay)
             await self.connect()
         else:

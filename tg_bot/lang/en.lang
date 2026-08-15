@@ -9,6 +9,7 @@
   "no_permission": "❌ <b>Access Denied</b>\n\nYou do not have permission to use this bot.",
   "language_changed": "✅ <b>Language Changed</b>\n\nNew language: {language}",
   "help_message": "📚 <b>Available Commands:</b>\n\n/start - Main menu\n/status - Check status\n/balance - Check points\n/restart - Restart bot\n/help - Show help",
+  "help_message_multi": "\n\n<b>Multi-account commands:</b>\n/accounts — Accounts overview\n/status — Status with priorities\n/balance — Points by account",
   "alert_no_update": "⚠️ <b>ALERT: No Points</b>\n\nStreamer <b>{streamer}</b> hasn't received points for {minutes} mins.\nAuto-restart pending.",
   "points_updated": "✅ <b>Points Updated</b>\n\n👤 <b>{streamer}</b>\n➕ {amount} points\n💎 Total: {total}",
   "startup_notification": "🚀 <b>Bot Started Successfully</b>\n\nFarming active for:\n{streamers}",
@@ -21,5 +22,27 @@
   "btn_balance": "💰 Balance",
   "btn_help": "❓ Help",
   "btn_restart": "🔄 Restart",
-  "btn_accounts": "👥 Accounts"
+  "btn_accounts": "👥 Accounts",
+
+  "multi_status_title": "📊 Multi-Account Status",
+  "multi_balance_title": "💰 Points by Account",
+  "accounts_overview_title": "👥 Accounts Overview",
+  "subtotal_label": "📊 Subtotal",
+  "total_label": "🏆 Total",
+  "streamers_label": "Streamers",
+  "online_label": "online",
+  "active_label": "Active",
+  "priority_label": "Priority",
+  "no_account_manager": "No AccountManager available",
+  "pts_suffix": "pts",
+  "not_available": "N/A",
+  "proxy_label": "proxy",
+  "direct_label": "direct",
+
+  "miner_started_title": "🚀 <b>Miner Started!</b>\n\n",
+  "no_streamers_configured": "None",
+  "no_points_alert": "⚠️ No points received: {streamers}",
+  "restarting_short": "🔄 Restarting...",
+  "language_usage": "Usage: /language [en/es/ru]",
+  "language_supported": "Supported languages: en, es, ru"
 }

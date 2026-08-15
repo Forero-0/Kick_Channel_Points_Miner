@@ -9,6 +9,7 @@
   "no_permission": "❌ <b>Доступ запрещен</b>\n\nУ вас нет прав для использования этого бота.",
   "language_changed": "✅ <b>Язык изменен</b>\n\nТекущий язык: {language}",
   "help_message": "📚 <b>Доступные команды:</b>\n\n/start - Главное меню\n/status - Статус майнера\n/balance - Баланс поинтов\n/restart - Перезапуск бота\n/help - Помощь",
+  "help_message_multi": "\n\n<b>Команды для мультиаккаунтов:</b>\n/accounts — Обзор аккаунтов\n/status — Статус с приоритетами\n/balance — Поинты по аккаунтам",
   "alert_no_update": "⚠️ <b>ВНИМАНИЕ: Нет поинтов</b>\n\nСтример <b>{streamer}</b> не получал поинты уже {minutes} минут.\nСкоро будет выполнен авто-перезапуск.",
   "points_updated": "✅ <b>Поинты получены</b>\n\n👤 <b>{streamer}</b>\n➕ {amount} поинтов\n💎 Всего: {total}",
   "startup_notification": "🚀 <b>Бот успешно запущен</b>\n\nАктивный фарминг для:\n{streamers}",
@@ -21,6 +22,27 @@
   "btn_balance": "💰 Баланс",
   "btn_help": "❓ Помощь",
   "btn_restart": "🔄 Перезапуск",
-  "btn_accounts": "👥 Аккаунты"
-}
+  "btn_accounts": "👥 Аккаунты",
+
+  "multi_status_title": "📊 Статус аккаунтов",
+  "multi_balance_title": "💰 Поинты по аккаунтам",
+  "accounts_overview_title": "👥 Обзор аккаунтов",
+  "subtotal_label": "📊 Подытог",
+  "total_label": "🏆 Всего",
+  "streamers_label": "Стримеров",
+  "online_label": "онлайн",
+  "active_label": "Активно",
+  "priority_label": "Приоритет",
+  "no_account_manager": "AccountManager недоступен",
+  "pts_suffix": "поинтов",
+  "not_available": "Н/Д",
+  "proxy_label": "прокси",
+  "direct_label": "напрямую",
+
+  "miner_started_title": "🚀 <b>Майнер запущен!</b>\n\n",
+  "no_streamers_configured": "Нет",
+  "no_points_alert": "⚠️ Нет начислений: {streamers}",
+  "restarting_short": "🔄 Перезапуск...",
+  "language_usage": "Использование: /language [en/es/ru]",
+  "language_supported": "Поддерживаемые языки: en, es, ru"
 }

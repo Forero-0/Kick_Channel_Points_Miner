@@ -20,12 +20,15 @@ if TYPE_CHECKING:
     from account_manager import AccountManager
 
 try:
-    from localization import t as loc_t
+    from localization import t as loc_t, DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 
     def t(key, **kwargs):
         val = loc_t(key, **kwargs)
         return val if val else key
 except ImportError:
+    DEFAULT_LANGUAGE = "en"
+    SUPPORTED_LANGUAGES = ("en", "es", "ru")
+
     def t(key, **kwargs):
         return key
 
@@ -39,7 +42,7 @@ class TelegramBot:
         self.config = config
         self.account_manager: Optional["AccountManager"] = None
 
-        # Обратная совместимость
+        # Backward compatibility with the legacy single-account bot state
         self._legacy_streamers: list[str] = []
         self._legacy_points: dict = {}
 
@@ -47,10 +50,10 @@ class TelegramBot:
 
     def set_account_manager(self, manager: "AccountManager"):
         self.account_manager = manager
-        logger.info(
-            f"TG Bot: подключён AccountManager "
-            f"({len(manager.workers)} аккаунтов)"
-        )
+        logger.info(t(
+            "tg_account_manager_connected",
+            count=len(manager.workers),
+        ))
 
     def set_streamers(self, streamers: list[str]):
         self._legacy_streamers = streamers
@@ -73,12 +76,12 @@ class TelegramBot:
     async def start(self):
         tg_conf = self.config.get("Telegram", {})
         if not tg_conf.get("enabled", False):
-            logger.info("Telegram bot disabled in config.")
+            logger.info(t("tg_disabled_in_config"))
             return
 
         token = tg_conf.get("bot_token", "")
         if not token:
-            logger.error("Telegram token not found!")
+            logger.error(t("tg_token_not_found"))
             return
 
         try:
@@ -110,11 +113,11 @@ class TelegramBot:
             )
 
             self.active = True
-            logger.success("✅ Telegram bot initialized")
+            logger.success(t("tg_bot_initialized"))
             await self._send_startup()
 
         except Exception as e:
-            logger.error(f"❌ Telegram init failed: {e}")
+            logger.error(t("tg_init_failed", error=e))
             self.active = False
 
     async def stop(self):
@@ -127,12 +130,12 @@ class TelegramBot:
                 await self.application.shutdown()
                 self.active = False
             except Exception as e:
-                logger.error(f"Error stopping TG bot: {e}")
+                logger.error(t("tg_stop_error", error=e))
 
     def load_language_files(self):
         lang_dir = "tg_bot/lang"
         os.makedirs(lang_dir, exist_ok=True)
-        for lang in ("en", "ru"):
+        for lang in SUPPORTED_LANGUAGES:
             path = os.path.join(lang_dir, f"{lang}.lang")
             try:
                 if os.path.exists(path):
@@ -141,28 +144,35 @@ class TelegramBot:
                 else:
                     self.language_files[lang] = {}
             except Exception as e:
-                logger.error(f"Error loading lang {lang}: {e}")
+                logger.error(t("tg_lang_load_error", lang=lang, error=e))
                 self.language_files[lang] = {}
 
-    def get_text(self, key, lang="en", **kwargs):
+    def get_text(self, key, lang=DEFAULT_LANGUAGE, **kwargs):
         d = self.language_files.get(
             lang.lower(),
-            self.language_files.get("en", {}),
+            self.language_files.get(DEFAULT_LANGUAGE, {}),
         )
-        text = d.get(key, f"🔑 {key}")
+        text = d.get(key)
+        if text is None:
+            # Fall back to English instead of leaking a raw key or mixing
+            # in another language's placeholder text.
+            text = self.language_files.get(
+                DEFAULT_LANGUAGE, {}
+            ).get(key, f"🔑 {key}")
         try:
             return text.format(**kwargs)
         except (KeyError, IndexError):
             return text
 
     def _lang(self, uid: int) -> str:
-        return self.user_language.get(
-            uid, self.config.get("Language", "en")
-        )
+        configured = self.config.get("Language", DEFAULT_LANGUAGE)
+        if configured not in SUPPORTED_LANGUAGES:
+            configured = DEFAULT_LANGUAGE
+        return self.user_language.get(uid, configured)
 
-    def get_keyboard(self, lang="en", is_admin=False):
+    def get_keyboard(self, lang=DEFAULT_LANGUAGE, is_admin=False):
         d = self.language_files.get(
-            lang, self.language_files.get("en", {})
+            lang, self.language_files.get(DEFAULT_LANGUAGE, {})
         )
         btn_stat = d.get("btn_status", "📊 Status")
         btn_bal = d.get("btn_balance", "💰 Balance")
@@ -200,8 +210,9 @@ class TelegramBot:
         return self._build_legacy_status(lang)
 
     def _build_multi_status(self, lang: str) -> str:
-        lines = ["<b>📊 Multi-Account Status</b>\n"]
+        lines = [f"<b>{self.get_text('multi_status_title', lang)}</b>\n"]
         now = datetime.now().strftime("%H:%M:%S")
+        pts_suffix = self.get_text("pts_suffix", lang)
 
         for worker in self.account_manager.workers:
             st = worker.get_status()
@@ -235,7 +246,7 @@ class TelegramBot:
                 lines.append(
                     f"  {icon} #{pri} "
                     f"<code>{name_esc}</code> "
-                    f"— {pts} pts{err_str}"
+                    f"— {pts} {pts_suffix}{err_str}"
                 )
             lines.append("")
 
@@ -261,8 +272,11 @@ class TelegramBot:
         return self._build_legacy_balance(lang)
 
     def _build_multi_balance(self, lang: str) -> str:
-        lines = ["<b>💰 Points by Account</b>\n"]
+        lines = [f"<b>{self.get_text('multi_balance_title', lang)}</b>\n"]
         total_all = 0
+        subtotal_label = self.get_text("subtotal_label", lang)
+        total_label = self.get_text("total_label", lang)
+        not_available = self.get_text("not_available", lang)
 
         for worker in self.account_manager.workers:
             st = worker.get_status()
@@ -278,7 +292,7 @@ class TelegramBot:
                 acc_total += pts
 
                 ts = (
-                    last.split("T")[1][:8] if last else "N/A"
+                    last.split("T")[1][:8] if last else not_available
                 )
                 icon = "👁" if watching else "  "
                 lines.append(
@@ -288,10 +302,10 @@ class TelegramBot:
 
             total_all += acc_total
             lines.append(
-                f"  📊 Subtotal: <b>{acc_total}</b>\n"
+                f"  {subtotal_label}: <b>{acc_total}</b>\n"
             )
 
-        lines.append(f"🏆 <b>Total: {total_all}</b>")
+        lines.append(f"{total_label}: <b>{total_all}</b>")
         return "\n".join(lines)
 
     def _build_legacy_balance(self, lang: str) -> str:
@@ -311,18 +325,21 @@ class TelegramBot:
         text = "\n\n".join(msgs)
         return text[:4000] if len(text) <= 4000 else text[:4000] + "..."
 
-    def _build_accounts_text(self) -> str:
+    def _build_accounts_text(self, lang: str = DEFAULT_LANGUAGE) -> str:
         if not self.account_manager:
-            return "No AccountManager"
+            return self.get_text("no_account_manager", lang)
 
-        lines = ["<b>👥 Accounts Overview</b>\n"]
+        lines = [f"<b>{self.get_text('accounts_overview_title', lang)}</b>\n"]
 
         for i, worker in enumerate(
             self.account_manager.workers
         ):
             st = worker.get_status()
             alias = html.escape(st["alias"])
-            proxy = "🔒 proxy" if st["proxy"] else "🌐 direct"
+            proxy_word = self.get_text(
+                "proxy_label" if st["proxy"] else "direct_label", lang
+            )
+            proxy = ("🔒 " if st["proxy"] else "🌐 ") + proxy_word
             active = st["active_count"]
             limit = st["max_concurrent"]
             total = len(st["streamers"])
@@ -336,9 +353,10 @@ class TelegramBot:
             lines.append(
                 f"<b>#{i + 1} {alias}</b>\n"
                 f"  {proxy}\n"
-                f"  Стримеров: {total} (онлайн: {online})\n"
-                f"  Активно: {active}/{limit}\n"
-                f"  Приоритет: {order}\n"
+                f"  {self.get_text('streamers_label', lang)}: {total} "
+                f"({self.get_text('online_label', lang)}: {online})\n"
+                f"  {self.get_text('active_label', lang)}: {active}/{limit}\n"
+                f"  {self.get_text('priority_label', lang)}: {order}\n"
             )
 
         return "\n".join(lines)
@@ -387,7 +405,7 @@ class TelegramBot:
         if not self.is_user_allowed(uid):
             return
         await update.message.reply_text(
-            self._build_accounts_text(),
+            self._build_accounts_text(self._lang(uid)),
             parse_mode=ParseMode.HTML,
         )
 
@@ -409,7 +427,7 @@ class TelegramBot:
             parse_mode=ParseMode.HTML,
         )
         await asyncio.sleep(1)
-        logger.info("Restart requested via Telegram")
+        logger.info(t("tg_restart_requested"))
         sys.exit(1)
 
     async def cmd_help(self, update: Update, context):
@@ -417,12 +435,7 @@ class TelegramBot:
         if not self.is_user_allowed(uid):
             return
         lang = self._lang(uid)
-        extra = (
-            "\n\n<b>Multi-account commands:</b>\n"
-            "/accounts — Accounts overview\n"
-            "/status — Status with priorities\n"
-            "/balance — Points by account"
-        )
+        extra = self.get_text("help_message_multi", lang)
         await update.message.reply_text(
             self.get_text("help_message", lang) + extra,
             parse_mode=ParseMode.HTML,
@@ -443,11 +456,11 @@ class TelegramBot:
             return
         if not context.args:
             await update.message.reply_text(
-                "Usage: /language [en/ru]"
+                self.get_text("language_usage", self._lang(uid))
             )
             return
         code = context.args[0].lower()
-        if code in ("en", "ru"):
+        if code in SUPPORTED_LANGUAGES:
             self.user_language[uid] = code
             await update.message.reply_text(
                 self.get_text(
@@ -461,7 +474,7 @@ class TelegramBot:
             )
         else:
             await update.message.reply_text(
-                "Supported: en, ru"
+                self.get_text("language_supported", self._lang(uid))
             )
 
     async def handle_message(self, update: Update, context):
@@ -471,7 +484,7 @@ class TelegramBot:
         text = update.message.text
         lang = self._lang(uid)
         d = self.language_files.get(
-            lang, self.language_files.get("en", {})
+            lang, self.language_files.get(DEFAULT_LANGUAGE, {})
         )
         btn_map = {
             d.get("btn_status", "📊 Status"): self.cmd_status,
@@ -492,14 +505,17 @@ class TelegramBot:
             return
 
         if self.account_manager:
-            text = "🚀 <b>Miner Started!</b>\n\n"
-            text += self._build_accounts_text()
+            lang = self._lang(int(owner))
+            text = self.get_text("miner_started_title", lang)
+            text += self._build_accounts_text(lang)
         else:
+            lang = self._lang(int(owner))
             sl = "\n".join([
                 f"• <code>{html.escape(str(s))}</code>"
                 for s in self._legacy_streamers
-            ]) if self._legacy_streamers else "None"
-            lang = self._lang(int(owner))
+            ]) if self._legacy_streamers else self.get_text(
+                "no_streamers_configured", lang
+            )
             text = self.get_text(
                 "startup_notification", lang, streamers=sl
             )
@@ -525,10 +541,12 @@ class TelegramBot:
             if account_alias else ""
         )
         for uid in recipients:
+            lang = self._lang(int(uid))
+            total_label = self.get_text("total_label", lang)
             await self._send(
                 uid,
                 f"{prefix}💰 <b>{html.escape(streamer)}</b>"
-                f": +{gain} (Total: {new_amount})",
+                f": +{gain} ({total_label}: {new_amount})",
             )
 
     async def send_alert(self, streamers):
@@ -537,8 +555,9 @@ class TelegramBot:
         owner = self.config.get("Telegram", {}).get("chat_id")
         if owner:
             names = ", ".join(html.escape(s) for s in streamers)
+            lang = self._lang(int(owner))
             await self._send(
-                owner, f"⚠️ Нет начислений: {names}"
+                owner, self.get_text("no_points_alert", lang, streamers=names)
             )
 
     async def send_restart_notification(self):
@@ -546,7 +565,8 @@ class TelegramBot:
             return
         owner = self.config.get("Telegram", {}).get("chat_id")
         if owner:
-            await self._send(owner, "🔄 Перезапуск...")
+            lang = self._lang(int(owner))
+            await self._send(owner, self.get_text("restarting_short", lang))
 
     async def send_streamer_started(self, streamer):
         pass
@@ -576,4 +596,4 @@ class TelegramBot:
                     parse_mode=ParseMode.HTML,
                 )
         except Exception as e:
-            logger.error(f"TG send to {user_id} failed: {e}")
+            logger.error(t("tg_send_failed", user_id=user_id, error=e))

@@ -25,7 +25,7 @@ class DiscordWebhook:
         self.username = discord_cfg.get("username", "KickMiner")
         self.avatar_url = discord_cfg.get("avatar_url", "")
 
-        # Какие уведомления отправлять
+        # Which notification types to send
         self.notify_points = discord_cfg.get(
             "notify_points", True
         )
@@ -42,7 +42,7 @@ class DiscordWebhook:
             "min_points_gain", 10
         )
 
-        # Цвета (десятичные)
+        # Colors (decimal)
         self.color_success = discord_cfg.get(
             "color_success", 3461464  # #34D168
         )
@@ -69,7 +69,7 @@ class DiscordWebhook:
             logger.success(t("discord_webhook_initialized"))
 
     def _send_raw(self, payload: dict) -> bool:
-        """Отправка payload в Discord webhook"""
+        """Send the payload to the Discord webhook"""
         if not self.enabled:
             return False
 
@@ -135,7 +135,7 @@ class DiscordWebhook:
                 return False
 
     def _send_in_thread(self, payload: dict):
-        """Отправка в фоновом потоке"""
+        """Send in a background thread"""
         thread = threading.Thread(
             target=self._send_raw,
             args=(payload,),
@@ -203,7 +203,7 @@ class DiscordWebhook:
         self,
         accounts: List[dict],
     ):
-        """Уведомление о запуске майнера"""
+        """Notification: miner started"""
         if not self.enabled or not self.notify_startup:
             return
 
@@ -212,31 +212,32 @@ class DiscordWebhook:
             alias = acc.get("alias", "Unknown")
             streamers = acc.get("streamer_order", [])
             limit = acc.get("max_concurrent", 0)
-            proxy = "🔒 Proxy" if acc.get("proxy") else "🌐 Direct"
+            proxy = t("discord_proxy") if acc.get("proxy") else t("discord_direct")
 
             streamer_list = ", ".join(
                 streamers[:5]
             )
             if len(streamers) > 5:
-                streamer_list += f" +{len(streamers) - 5} more"
+                streamer_list += t(
+                    "discord_more_streamers",
+                    count=len(streamers) - 5,
+                )
 
             fields.append(self._field(
                 name=f"👤 {alias}",
                 value=(
-                    f"{proxy} · Limit: {limit}\n"
+                    f"{proxy} · {t('discord_field_limit')}: {limit}\n"
                     f"`{streamer_list}`"
                 ),
                 inline=False,
             ))
 
         embed = self._embed(
-            title="🚀 KickMiner Started",
-            description=(
-                f"**{len(accounts)}** account(s) loaded"
-            ),
+            title=t("discord_startup_title"),
+            description=t("discord_startup_desc", count=len(accounts)),
             color=self.color_success,
             fields=fields,
-            footer="Kick Channel Points Miner",
+            footer=t("discord_footer"),
         )
 
         payload = self._build_payload([embed])
@@ -249,7 +250,7 @@ class DiscordWebhook:
         old_amount: int,
         new_amount: int,
     ):
-        """Уведомление о начислении поинтов"""
+        """Notification: points earned"""
         if not self.enabled or not self.notify_points:
             return
 
@@ -258,14 +259,14 @@ class DiscordWebhook:
             return
 
         embed = self._embed(
-            title="💰 Points Earned",
+            title=t("discord_points_title"),
             color=self.color_success,
             url=f"https://kick.com/{streamer}",
             fields=[
-                self._field("Streamer", f"[{streamer}](https://kick.com/{streamer})"),
-                self._field("Gained", f"+{gain:,}"),
-                self._field("Total", f"{new_amount:,}"),
-                self._field("Account", account_alias),
+                self._field(t("discord_field_streamer"), f"[{streamer}](https://kick.com/{streamer})"),
+                self._field(t("discord_field_gained"), f"+{gain:,}"),
+                self._field(t("discord_field_total"), f"{new_amount:,}"),
+                self._field(t("discord_field_account"), account_alias),
             ],
         )
 
@@ -279,38 +280,28 @@ class DiscordWebhook:
         priority: int,
         action: str = "started",
     ):
-        """Уведомление: стример вышел в онлайн / начали смотреть"""
+        """Notification: streamer went online / started watching"""
         if not self.enabled or not self.notify_status:
             return
 
+        url = f"https://kick.com/{streamer}"
+
         if action == "started":
-            title = "▶️ Now Watching"
+            title = t("discord_watching_title")
             color = self.color_success
-            desc = (
-                f"Started watching "
-                f"[{streamer}](https://kick.com/{streamer})"
-            )
+            desc = t("discord_watching_desc", streamer=streamer, url=url)
         elif action == "displaced":
-            title = "⏹ Streamer Displaced"
+            title = t("discord_displaced_title")
             color = self.color_warning
-            desc = (
-                f"[{streamer}](https://kick.com/{streamer}) "
-                f"was displaced by higher priority"
-            )
+            desc = t("discord_displaced_desc", streamer=streamer, url=url)
         elif action == "online":
-            title = "🟢 Streamer Online"
+            title = t("discord_online_title")
             color = self.color_info
-            desc = (
-                f"[{streamer}](https://kick.com/{streamer}) "
-                f"went live"
-            )
+            desc = t("discord_online_desc", streamer=streamer, url=url)
         elif action == "offline":
-            title = "🔴 Streamer Offline"
+            title = t("discord_offline_title")
             color = self.color_warning
-            desc = (
-                f"[{streamer}](https://kick.com/{streamer}) "
-                f"went offline"
-            )
+            desc = t("discord_offline_desc", streamer=streamer, url=url)
         else:
             title = f"📡 {action}"
             color = self.color_info
@@ -321,8 +312,8 @@ class DiscordWebhook:
             description=desc,
             color=color,
             fields=[
-                self._field("Account", account_alias),
-                self._field("Priority", f"#{priority}"),
+                self._field(t("discord_field_account"), account_alias),
+                self._field(t("discord_field_priority"), f"#{priority}"),
             ],
         )
 
@@ -335,19 +326,19 @@ class DiscordWebhook:
         streamer: str,
         error: str,
     ):
-        """Уведомление об ошибке"""
+        """Notification: error occurred"""
         if not self.enabled or not self.notify_errors:
             return
 
         safe_error = str(error)[:500]
 
         embed = self._embed(
-            title="❌ Error",
+            title=t("discord_error_title"),
             description=f"```\n{safe_error}\n```",
             color=self.color_error,
             fields=[
-                self._field("Account", account_alias),
-                self._field("Streamer", streamer),
+                self._field(t("discord_field_account"), account_alias),
+                self._field(t("discord_field_streamer"), streamer),
             ],
         )
 
@@ -358,7 +349,7 @@ class DiscordWebhook:
         self,
         accounts_status: List[dict],
     ):
-        """Полный статус всех аккаунтов (по запросу)"""
+        """Full status of all accounts (on demand)"""
         if not self.enabled:
             return
 
@@ -369,7 +360,7 @@ class DiscordWebhook:
             alias = acc.get("alias", "Unknown")
             active = acc.get("active_count", 0)
             limit = acc.get("max_concurrent", 0)
-            proxy = "🔒" if acc.get("proxy") else "🌐"
+            proxy = "🔒" if acc.get("proxy") else "🌐"  # icon-only, kept language-neutral
             streamers = acc.get("streamers", {})
             order = acc.get("streamer_order", list(streamers.keys()))
 
@@ -402,7 +393,7 @@ class DiscordWebhook:
 
             grand_total += acc_total
 
-            description = "\n".join(lines) if lines else "No streamers"
+            description = "\n".join(lines) if lines else t("discord_no_streamers")
 
             embed = self._embed(
                 title=f"{proxy} {alias} [{active}/{limit}]",
@@ -410,7 +401,7 @@ class DiscordWebhook:
                 color=self.color_info,
                 fields=[
                     self._field(
-                        "Subtotal",
+                        t("discord_field_subtotal"),
                         f"**{acc_total:,}** pts",
                     ),
                 ],
@@ -422,20 +413,20 @@ class DiscordWebhook:
 
         if embeds:
             embeds[-1]["footer"] = {
-                "text": f"Grand Total: {grand_total:,} pts",
+                "text": t("discord_grand_total", total=f"{grand_total:,}"),
             }
 
         payload = self._build_payload(embeds)
         self._send_in_thread(payload)
 
     def send_restart(self, reason: str = "Manual"):
-        """Уведомление о перезапуске"""
+        """Notification: restart"""
         if not self.enabled:
             return
 
         embed = self._embed(
-            title="🔄 Miner Restarting",
-            description=f"Reason: {reason}",
+            title=t("discord_restart_title"),
+            description=t("discord_restart_desc", reason=reason),
             color=self.color_warning,
         )
 
@@ -448,7 +439,7 @@ class DiscordWebhook:
         description: str,
         color: int = None,
     ):
-        """Произвольное сообщение"""
+        """Custom message"""
         if not self.enabled:
             return
 
