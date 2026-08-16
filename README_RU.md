@@ -5,7 +5,7 @@
 
 > [🇬🇧 **Read in English**](README.md) • [🇪🇸 **Leer en español**](README_es.md)
 
-Мощный асинхронный бот для автоматического фарма поинтов каналов на **Kick.com**. Поддержка мультиаккаунтов, система приоритетов, SOCKS5 прокси, современный Web Dashboard и управление через Telegram.
+Мощный асинхронный бот для автоматического фарма поинтов каналов на **Kick.com**. Поддержка мультиаккаунтов, система приоритетов, SOCKS5 прокси и управление через Telegram.
 
 ---
 
@@ -16,7 +16,6 @@
 *   **🔒 Лимиты одновременного просмотра:** Настройка `max_concurrent` на каждый аккаунт – предотвращает 403 ошибки.
 *   **🌐 SOCKS5/HTTP прокси:** Глобальный или индивидуальный прокси для каждого аккаунта.
 *   **🛡️ Обход Cloudflare:** Встроенная система на `curl_cffi` с авто-ретраем при 403.
-*   **🖥️ Web Dashboard:** Красивая панель мониторинга с отображением всех аккаунтов, приоритетов, поинтов и ссылками на стримы.
 *   **📱 Telegram бот:**
     *   **Система Owner/Guest:** Владелец имеет полный контроль, гости могут только просматривать статус.
     *   **Мультиаккаунт-отображение:** Команды `/status`, `/balance`, `/accounts` показывают данные по аккаунтам.
@@ -53,11 +52,6 @@
 {
   "Language": "en",
   "Debug": false,
-
-  "WebDashboard": {
-    "enabled": true,
-    "port": 5000
-  },
 
   "Telegram": {
     "enabled": false,
@@ -118,7 +112,6 @@
 {
   "Language": "en",
   "Debug": false,
-  "WebDashboard": { "enabled": true, "port": 5000 },
   "Telegram": { "enabled": false, "bot_token": "", "chat_id": "", "allowed_users": [] },
   "Private": { "token": "YOUR_KICK_TOKEN" },
   "Streamers": ["stream1", "stream2", "stream3"],
@@ -132,9 +125,6 @@
 
 *   **`Language`**:  `"en"` или `"ru"`.
 *   **`Debug`**: Установить `"true"` для дополнительных логов, `"false"` для чистого вывода.
-*   **`WebDashboard`**:
-    *   `enabled`: установите значение `true` чтобы включить веб-панель.
-    *   `port`: порт для доступа к статистике (по умолчанию: `http://localhost:5000`).
 *   **`Telegram`**:
     *   `bot_token`: Получите это от @BotFather.
     *   `chat_id`: Ваш личный идентификатор в Telegram (вы будете **Владельцем**).
@@ -300,20 +290,6 @@ Notifications include:
 
 ---
 
-## 🖥️ Веб-дашборд
-
-Если включено в конфиге, откройте **`http://localhost:5000`** в браузере.
-Вы увидите таблицу в реальном времени:
-*   📊 Все аккаунты с лимитами и активными стримерами
-*   🎯 Бейджи приоритетов
-*   👁 Статусы в реальном времени (watching/online/offline)
-*   💰 Баланс поинтов по каждому стримеру
-*   🔗 Кнопки «Watch» для перехода на стрим на Kick.com
-*   🔒 Статус прокси
-*   ⚠️ Счётчики ошибок
-
----
-
 ## 🌐  Proxy Support
 
 | Тип | Формат | Пример |
@@ -333,7 +309,6 @@ Kick_Channel_Points_Miner/
 ├── main.py                    # Точка входа
 ├── account_manager.py         # Мультиаккаунт-оркестратор с приоритетами
 ├── config.json                # Конфигурация
-├── web_server.py              # Flask Web Dashboard
 ├── localization.py            # Загрузчик локализации
 ├── requirements.txt           # Зависимости
 ├── _websockets/
@@ -374,11 +349,8 @@ docker run -d \
   --name kick-miner \
   --restart unless-stopped \
   -v "$(pwd)/config.json:/app/config.json:ro" \
-  -p 5000:5000 \
   kick-channel-points-miner
 ```
-
-Панель управления → **http://localhost:5000**
 
 ---
 

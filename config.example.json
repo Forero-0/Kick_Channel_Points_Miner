@@ -2,11 +2,6 @@
   "Language": "en",
   "Debug": false,
 
-  "WebDashboard": {
-    "enabled": true,
-    "port": 5000
-  },
-
   "Telegram": {
     "enabled": false,
     "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",

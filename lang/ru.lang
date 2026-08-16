@@ -194,8 +194,6 @@
   "total_unique_streamers": "📋 Всего уникальных стримеров: {count}",
   "discord_webhook_enabled": "🟣 Discord webhook включён",
   "telegram_failed_to_start": "Telegram не запустился: {error}",
-  "web_dashboard_url": "🌍 Web Dashboard: {url}",
-  "web_dashboard_failed_to_start": "Web Dashboard не запустился: {error}",
   "memory_monitor_started": "📊 Memory Monitor: ЗАПУЩЕН",
   "starting_miner": "🚀 Запуск Miner...",
   "stopped_by_user": "👋 Остановлено пользователем",
@@ -272,8 +270,6 @@
   "tg_language_usage": "Использование: /language [en/es/ru]",
   "tg_language_supported": "Поддерживаемые языки: en, es, ru",
   "tg_miner_started": "🚀 <b>Майнер запущен!</b>\n\n",
-
-  "web_dashboard_available": "🌍 Web Dashboard доступен по адресу {url}",
 
   "daily_challenge_json_error": "❌ Ежедневное задание: ошибка разбора JSON: {error}",
   "daily_challenge_401": "🔒 Ежедневное задание: нет доступа (токен истёк/недействителен)",

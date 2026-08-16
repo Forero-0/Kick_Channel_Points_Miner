@@ -194,8 +194,6 @@
   "total_unique_streamers": "📋 Total de streamers únicos: {count}",
   "discord_webhook_enabled": "🟣 Webhook de Discord activado",
   "telegram_failed_to_start": "Telegram no se pudo iniciar: {error}",
-  "web_dashboard_url": "🌍 Panel web: {url}",
-  "web_dashboard_failed_to_start": "El panel web no se pudo iniciar: {error}",
   "memory_monitor_started": "📊 Monitor de memoria: INICIADO",
   "starting_miner": "🚀 Iniciando Miner...",
   "stopped_by_user": "👋 Detenido por el usuario",
@@ -272,8 +270,6 @@
   "tg_language_usage": "Uso: /language [en/es/ru]",
   "tg_language_supported": "Idiomas soportados: en, es, ru",
   "tg_miner_started": "🚀 <b>¡Miner iniciado!</b>\n\n",
-
-  "web_dashboard_available": "🌍 Panel web disponible en {url}",
 
   "daily_challenge_json_error": "❌ Reto diario: error al parsear JSON: {error}",
   "daily_challenge_401": "🔒 Reto diario: no autorizado (token expirado/inválido)",

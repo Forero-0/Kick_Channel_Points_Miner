@@ -5,7 +5,7 @@
 
 > [🇷🇺 **Читать на русском языке**](README_RU.md) • [🇪🇸 **Leer en español**](README_es.md)
 
-A powerful, asynchronous bot for automatically farming channel points on **Kick.com**. Features a modern Web Dashboard, advanced Telegram control, and Cloudflare protection bypass.
+A powerful, asynchronous bot for automatically farming channel points on **Kick.com**. Features advanced Telegram control and Cloudflare protection bypass.
 
 ---
 
@@ -16,7 +16,6 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
 *   **🔒 Concurrent Limits:** Set `max_concurrent` per account to control how many streamers are watched at once – prevents 403 rate-limiting.
 *   **🌐 SOCKS5/HTTP Proxy:** Global or per-account proxy support to avoid IP blocks.
 *   **🛡️ Cloudflare Bypass:** Built-in `curl_cffi` based session management with automatic retry on 403.
-*   **🖥️ Web Dashboard:** Beautiful real-time dashboard showing all accounts, priorities, points, and streamer statuses with direct links to streams.
 *   **📱 Telegram Bot:**
     *   **Owner/Guest System:** Owner has full control, guests can only view status.
     *   **Multi-Account Views:** `/status`, `/balance`, `/accounts` commands show data per account.
@@ -53,11 +52,6 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
 {
   "Language": "en",
   "Debug": false,
-
-  "WebDashboard": {
-    "enabled": true,
-    "port": 5000
-  },
 
   "Telegram": {
     "enabled": false,
@@ -118,7 +112,6 @@ The old single-account format is automatically converted:
 {
   "Language": "en",
   "Debug": false,
-  "WebDashboard": { "enabled": true, "port": 5000 },
   "Telegram": { "enabled": false, "bot_token": "", "chat_id": "", "allowed_users": [] },
   "Private": { "token": "YOUR_KICK_TOKEN" },
   "Streamers": ["stream1", "stream2", "stream3"],
@@ -132,9 +125,6 @@ The old single-account format is automatically converted:
 
 *   **`Language`**: Set to `"en"` or `"ru"`.
 *   **`Debug`**: Set `"true"` for detailed logs, `"false"` for clean output.
-*   **`WebDashboard`**:
-    *   `enabled`: Set to `true` to turn on the web panel.
-    *   `port`: Port to access stats (default: `http://localhost:5000`).
 *   **`Telegram`**:
     *   `bot_token`: Get this from @BotFather.
     *   `chat_id`: Your personal Telegram ID (you will be the **Owner**).
@@ -298,20 +288,6 @@ When a reward is claimed, the notification shows:
 
 ---
 
-## 🖥️ Web Dashboard
-
-If enabled, visit **`http://localhost:5000`** in your browser.
-You will see a real-time table with:
-*   📊 All accounts with their limits and active streamers
-*   🎯 Priority badges for each streamer
-*   👁 Real-time watching/online/offline status
-*   💰 Points balance per streamer
-*   🔗 Direct "Watch" links to open streams on Kick.com
-*   🔒 Proxy status per account
-*   ⚠️ Error counters
-
----
-
 ## 🌐  Proxy Support
 
 | Type | Format | Example |
@@ -331,7 +307,6 @@ Kick_Channel_Points_Miner/
 ├── main.py                    # Entry point
 ├── account_manager.py         # Multi-account orchestrator with priorities
 ├── config.json                # Configuration
-├── web_server.py              # Flask Web Dashboard
 ├── localization.py            # i18n loader
 ├── requirements.txt           # Dependencies
 ├── _websockets/
@@ -372,11 +347,8 @@ docker run -d \
   --name kick-miner \
   --restart unless-stopped \
   -v "$(pwd)/config.json:/app/config.json:ro" \
-  -p 5000:5000 \
   kick-channel-points-miner
 ```
-
-Dashboard → **http://localhost:5000**
 
 ---
 

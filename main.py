@@ -10,7 +10,6 @@ from localization import load_language, t, DEFAULT_LANGUAGE
 
 from account_manager import AccountManager
 from discord_webhook import DiscordWebhook
-import web_server
 
 
 def _read_configured_language(default=DEFAULT_LANGUAGE):
@@ -85,17 +84,7 @@ async def main():
         except Exception as e:
             logger.error(t("telegram_failed_to_start", error=e))
 
-    # 5. Web Dashboard
-    web_cfg = config.get("WebDashboard", {})
-    if web_cfg.get("enabled", False):
-        port = web_cfg.get("port", 5000)
-        try:
-            web_server.start_server(account_manager, port)
-            logger.info(t("web_dashboard_url", url=f"http://localhost:{port}"))
-        except Exception as e:
-            logger.error(t("web_dashboard_failed_to_start", error=e))
-
-    # 6. Send startup notifications
+    # 5. Send startup notifications
     if discord_hook.enabled:
         discord_hook.send_startup(
             account_manager.get_all_status()
@@ -105,7 +94,7 @@ async def main():
         asyncio.create_task(log_memory_usage(interval=60))
         logger.info(t("memory_monitor_started"))
 
-    # 7. Start all accounts
+    # 6. Start all accounts
     await account_manager.start_all()
 
 
