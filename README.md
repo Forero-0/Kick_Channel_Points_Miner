@@ -264,6 +264,40 @@ Notifications include:
 
 ---
 
+### 🎯 Daily Reward Claim
+
+Automatically checks and claims Kick's gamification daily challenge (watch-time reward + roulette prize), per account, and can post the result to Discord and/or Telegram.
+
+**How it works — no fixed polling interval:**
+1. When it starts (or right after claiming, or when a new day's challenge window begins), it asks Kick's API once how many watch-time minutes are still needed.
+2. From then on it only counts time locally while the account is actually watching a stream. If nothing is being watched, the challenge can't progress on Kick's side either, so it doesn't bother calling the API at all during that dead time.
+3. Once the accumulated watch time reaches what was missing, it checks again — if it's ready, it claims it automatically and logs/notifies the result.
+4. Once claimed for the day, it stops touching the API entirely until the current challenge window ends, and only checks again after the next one starts — no wasted requests, no unnecessary polling.
+
+**Configuration:**
+```json
+{
+  "ClaimDailyReward": {
+    "enabled": false,
+    "notify_discord": true,
+    "notify_telegram": true
+  }
+}
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `enabled` | Turns the whole feature on/off. Disabled by default. |
+| `notify_discord` | Post the claimed reward to Discord (uses the `Discord` webhook config above). |
+| `notify_telegram` | Post the claimed reward to Telegram (sends the reward card as a photo). |
+
+When a reward is claimed, the notification shows:
+* 🎉 Confirmation that the challenge was claimed
+* 🏆 The reward's rarity, with its card image attached (when it's a new card)
+* 🎁 Or, if you already owned that card, how many extra watch-time minutes you got towards your next level instead
+
+---
+
 ## 🖥️ Web Dashboard
 
 If enabled, visit **`http://localhost:5000`** in your browser.

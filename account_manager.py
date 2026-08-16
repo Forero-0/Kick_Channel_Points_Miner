@@ -1,6 +1,6 @@
 import asyncio
 import random
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass, field
 from loguru import logger
@@ -10,9 +10,11 @@ from _websockets.ws_token import KickPoints
 from _websockets.ws_connect import KickWebSocket
 from utils.kick_utility import KickUtility
 from utils.get_points_amount import PointsAmount
+from utils.daily_challenge import DailyChallenge
 
 if TYPE_CHECKING:
     from discord_webhook import DiscordWebhook
+    from tg_bot.bot import TelegramBot
 
 
 @dataclass
@@ -62,6 +64,9 @@ class AccountWorker:
         reconnect_cooldown: int = 600,
         stagger_min: float = 3.0,
         stagger_max: float = 8.0,
+        daily_challenge_enabled: bool = False,
+        daily_challenge_notify_discord: bool = True,
+        daily_challenge_notify_telegram: bool = True,
     ):
         self.alias = account_cfg["alias"]
         self.token = account_cfg["token"]
@@ -71,6 +76,15 @@ class AccountWorker:
         self.reconnect_cooldown = reconnect_cooldown
         self.stagger_min = stagger_min
         self.stagger_max = stagger_max
+        self.daily_challenge_enabled = daily_challenge_enabled
+        self.daily_challenge_notify_discord = daily_challenge_notify_discord
+        self.daily_challenge_notify_telegram = daily_challenge_notify_telegram
+
+        # Internal-only, not configurable: how often (seconds) the loop
+        # wakes up to check "are we watching something right now" and add
+        # to the accumulated watch time. This is NOT an API call, just a
+        # local counter tick, so a short value is cheap and safe.
+        self._DAILY_CHALLENGE_TICK_SECONDS = 30
 
         streamer_names: List[str] = account_cfg.get("streamers", [])
 
@@ -89,13 +103,19 @@ class AccountWorker:
         self._utility_cache: Dict[str, KickUtility] = {}
         self._points_checker: Optional[PointsAmount] = None
         self._ws_token_getter: Optional[KickPoints] = None
+        self._daily_challenge: Optional[DailyChallenge] = None
+        self._daily_challenge_task: Optional[asyncio.Task] = None
         self._discord: Optional["DiscordWebhook"] = None
+        self._tg_bot: Optional["TelegramBot"] = None
 
         self._rebalance_lock = asyncio.Lock()
         self._running = False
 
     def set_discord(self, discord: "DiscordWebhook"):
         self._discord = discord
+
+    def set_tg_bot(self, tg_bot: "TelegramBot"):
+        self._tg_bot = tg_bot
 
     def _get_utility(self, streamer: str) -> KickUtility:
         if streamer not in self._utility_cache:
@@ -116,6 +136,11 @@ class AccountWorker:
             )
         return self._ws_token_getter
 
+    def _get_daily_challenge(self) -> DailyChallenge:
+        if self._daily_challenge is None:
+            self._daily_challenge = DailyChallenge(proxy=self.proxy)
+        return self._daily_challenge
+
     async def start(self):
         self._running = True
         logger.info(t(
@@ -125,6 +150,11 @@ class AccountWorker:
             limit=self.max_concurrent,
             proxy=t("yes") if self.proxy else t("no"),
         ))
+
+        if self.daily_challenge_enabled:
+            self._daily_challenge_task = asyncio.create_task(
+                self._daily_challenge_loop()
+            )
 
         try:
             await self._check_all_online()
@@ -411,8 +441,199 @@ class AccountWorker:
                     alias=self.alias, streamer=name, error=e,
                 ))
 
+    def _notify_daily_reward(self, outcome: dict):
+        """
+        Sends the Discord / Telegram notifications for a claimed daily
+        reward, based on the ClaimDailyReward.notify_discord /
+        notify_telegram flags. `outcome` is the "claimed": True branch
+        returned by DailyChallenge.check_and_claim().
+        """
+        result = outcome.get("result") or {}
+        consolation = result.get("consolation")
+        winner = result.get("winner", {}) or {}
+
+        if consolation:
+            already_owned = True
+            rarity = None
+            card_url = None
+            watch_time_minutes = consolation.get("watch_time_minutes")
+            logger.success(t(
+                "daily_challenge_consolation",
+                alias=self.alias, minutes=watch_time_minutes,
+            ))
+        else:
+            already_owned = False
+            rarity = winner.get("rarity", "unknown")
+            card_url = winner.get("card_url")
+            watch_time_minutes = None
+            logger.success(t(
+                "daily_challenge_claimed",
+                alias=self.alias, rarity=rarity,
+            ))
+
+        if self._discord and self.daily_challenge_notify_discord:
+            self._discord.send_daily_reward_claimed(
+                self.alias,
+                rarity=rarity,
+                card_url=card_url,
+                watch_time_minutes=watch_time_minutes,
+                already_owned=already_owned,
+            )
+
+        if self._tg_bot and self.daily_challenge_notify_telegram:
+            asyncio.create_task(
+                self._tg_bot.send_daily_reward_claimed(
+                    self.alias,
+                    rarity=rarity,
+                    card_url=card_url,
+                    watch_time_minutes=watch_time_minutes,
+                    already_owned=already_owned,
+                )
+            )
+
+    async def _daily_challenge_loop(self):
+        """
+        Watches the Kick gamification daily challenge and claims it as
+        soon as it's ready. Fully optional: controlled by
+        ClaimDailyReward.enabled in config.json. Safe to disable/remove at
+        any time without affecting the rest of the miner.
+
+        This has no fixed "check every N seconds" polling. Instead:
+
+          - On the first run (or right after claiming/after a new day's
+            window starts), it calls the API once to learn exactly how
+            many watch-time minutes are still missing
+            (`remaining_minutes`).
+          - From then on it only accumulates local watch time while this
+            account is actually watching a stream (state.active_count >
+            0). Dead air (nobody watching) doesn't count, since the
+            challenge can't progress then either -> no point calling the
+            API.
+          - Once the accumulated watch time reaches `remaining_minutes`,
+            it calls the API again to re-check/claim. If Kick says it's
+            still not enough (our estimate was off), it just re-reads the
+            new `remaining_minutes` and keeps accumulating.
+          - Once claimed for the day, it stops touching the API entirely
+            until the current challenge window ends (`window_ends_at`),
+            same as before — no watch-time accounting needed while
+            already claimed.
+
+        A short internal tick (self._DAILY_CHALLENGE_TICK_SECONDS) is
+        used only to sample "are we watching right now" locally; it never
+        calls the Kick API by itself.
+        """
+        checker = self._get_daily_challenge()
+
+        # None = "we don't know yet, need to ask the API before we can
+        # accumulate anything meaningful".
+        remaining_seconds: Optional[float] = None
+        accumulated_seconds = 0.0
+        sleep_until_next_window_check = False
+        window_ends_at = None
+
+        while self._running:
+            try:
+                if sleep_until_next_window_check:
+                    # Already claimed today: just wait for the window to
+                    # roll over, no watch-time accounting needed.
+                    now = datetime.now(timezone.utc)
+
+                    if window_ends_at is not None and window_ends_at <= now:
+                        # The window we were waiting on has already ended -
+                        # go re-check right away instead of waiting for
+                        # another fallback window.
+                        sleep_until_next_window_check = False
+                        window_ends_at = None
+                        remaining_seconds = None
+                        accumulated_seconds = 0.0
+                    else:
+                        effective_end = window_ends_at
+                        if effective_end is None:
+                            # Kick didn't give us a usable window end at
+                            # all - fall back to end of the current UTC
+                            # day so we never spin-loop calling the API
+                            # every tick.
+                            effective_end = now.replace(
+                                hour=23, minute=59, second=59, microsecond=0
+                            )
+                            if effective_end <= now:
+                                effective_end += timedelta(days=1)
+
+                        seconds_left = (effective_end - now).total_seconds()
+                        if seconds_left > 0:
+                            await asyncio.sleep(min(seconds_left, 3600))
+                            continue
+
+                        # Fallback window also elapsed -> ask the API again.
+                        sleep_until_next_window_check = False
+                        window_ends_at = None
+                        remaining_seconds = None
+                        accumulated_seconds = 0.0
+
+                is_watching = self.state.active_count > 0
+
+                need_first_check = remaining_seconds is None
+                reached_estimate = (
+                    remaining_seconds is not None
+                    and accumulated_seconds >= remaining_seconds
+                )
+
+                if need_first_check or reached_estimate:
+                    outcome = checker.check_and_claim(self.token, self.alias)
+
+                    if outcome.get("claimed"):
+                        self._notify_daily_reward(outcome)
+                        window_ends_at = None
+                        sleep_until_next_window_check = True
+
+                    elif outcome.get("already_claimed"):
+                        window_ends_at = outcome.get("window_ends_at")
+                        sleep_until_next_window_check = True
+
+                    elif outcome.get("in_progress"):
+                        remaining_minutes = outcome.get(
+                            "remaining_minutes", 0
+                        ) or 0
+                        remaining_seconds = remaining_minutes * 60
+                        accumulated_seconds = 0.0
+                        if remaining_seconds <= 0:
+                            # Kick still reports "in progress" even though
+                            # our math says the goal is met - avoid
+                            # hammering the API every tick while it
+                            # catches up; back off briefly instead.
+                            await asyncio.sleep(60)
+
+                    else:
+                        # No challenge data at all (API/auth issue) -
+                        # back off a bit before trying again so we don't
+                        # spam a failing endpoint.
+                        remaining_seconds = None
+                        await asyncio.sleep(300)
+
+                elif is_watching:
+                    accumulated_seconds += self._DAILY_CHALLENGE_TICK_SECONDS
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(t(
+                    "daily_challenge_loop_error",
+                    alias=self.alias, error=e,
+                ))
+                await asyncio.sleep(60)
+                continue
+
+            await asyncio.sleep(self._DAILY_CHALLENGE_TICK_SECONDS)
+
     async def stop(self):
         self._running = False
+
+        if self._daily_challenge_task and not self._daily_challenge_task.done():
+            self._daily_challenge_task.cancel()
+            try:
+                await self._daily_challenge_task
+            except asyncio.CancelledError:
+                pass
 
         for name in list(self.state.streamers):
             if self.state.streamers[name].is_watching:
@@ -425,6 +646,10 @@ class AccountWorker:
         if self._ws_token_getter:
             self._ws_token_getter.close()
             self._ws_token_getter = None
+
+        if self._daily_challenge:
+            self._daily_challenge.close()
+            self._daily_challenge = None
 
         for u in self._utility_cache.values():
             u.close()
@@ -464,6 +689,7 @@ class AccountManager:
         self.workers: List[AccountWorker] = []
         self._tasks: List[asyncio.Task] = []
         self._discord: Optional["DiscordWebhook"] = None
+        self._tg_bot: Optional["TelegramBot"] = None
 
         proxy_cfg = config.get("Proxy", {})
         global_proxy = (
@@ -477,6 +703,15 @@ class AccountManager:
         )
         stagger_min = config.get("Connection_stagger_min", 3)
         stagger_max = config.get("Connection_stagger_max", 8)
+
+        daily_challenge_cfg = config.get("ClaimDailyReward", {})
+        daily_challenge_enabled = daily_challenge_cfg.get("enabled", False)
+        daily_challenge_notify_discord = daily_challenge_cfg.get(
+            "notify_discord", True
+        )
+        daily_challenge_notify_telegram = daily_challenge_cfg.get(
+            "notify_telegram", True
+        )
 
         # Backward compatibility with the old single-account config format
         accounts = config.get("Accounts", [])
@@ -504,6 +739,9 @@ class AccountManager:
                     reconnect_cooldown=reconnect_cooldown,
                     stagger_min=stagger_min,
                     stagger_max=stagger_max,
+                    daily_challenge_enabled=daily_challenge_enabled,
+                    daily_challenge_notify_discord=daily_challenge_notify_discord,
+                    daily_challenge_notify_telegram=daily_challenge_notify_telegram,
                 )
             )
 
@@ -520,6 +758,15 @@ class AccountManager:
             worker.set_discord(discord)
         logger.info(t(
             "discord_connected_accounts", count=len(self.workers),
+        ))
+
+    def set_tg_bot(self, tg_bot: "TelegramBot"):
+        """Attach the Telegram bot to every account worker."""
+        self._tg_bot = tg_bot
+        for worker in self.workers:
+            worker.set_tg_bot(tg_bot)
+        logger.info(t(
+            "tg_bot_connected_accounts", count=len(self.workers),
         ))
 
     async def start_all(self):

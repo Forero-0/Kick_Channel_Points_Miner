@@ -44,5 +44,8 @@
   "no_points_alert": "⚠️ Нет начислений: {streamers}",
   "restarting_short": "🔄 Перезапуск...",
   "language_usage": "Использование: /language [en/es/ru]",
-  "language_supported": "Поддерживаемые языки: en, es, ru"
+  "language_supported": "Поддерживаемые языки: en, es, ru",
+  "daily_reward_claimed": "🎉 Ежедневное задание получено!",
+  "daily_reward_rarity": "🏆 Редкость награды: {rarity}",
+  "daily_reward_consolation": "🎁 У вас уже была эта награда. Вы получили +{minutes} мин. времени просмотра для повышения уровня"
 }

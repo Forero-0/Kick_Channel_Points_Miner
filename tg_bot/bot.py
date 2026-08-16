@@ -571,6 +571,55 @@ class TelegramBot:
     async def send_streamer_started(self, streamer):
         pass
 
+    async def send_daily_reward_claimed(
+        self,
+        account_alias: str,
+        rarity: str = None,
+        card_url: str = None,
+        watch_time_minutes: int = None,
+        already_owned: bool = False,
+    ):
+        """
+        Notification: Kick daily gamification challenge claimed.
+        Sends the reward card image (card_url) when a new card was won.
+        """
+        if not self.active:
+            return
+        conf = self.config.get("Telegram", {})
+
+        recipients = set(conf.get("allowed_users", []))
+        owner = conf.get("chat_id")
+        if owner:
+            recipients.add(owner)
+
+        prefix = f"[{html.escape(account_alias)}] " if account_alias else ""
+
+        for uid in recipients:
+            lang = self._lang(int(uid))
+            if already_owned:
+                text = (
+                    f"{prefix}"
+                    + self.get_text(
+                        "daily_reward_consolation", lang,
+                        minutes=watch_time_minutes,
+                    )
+                )
+                await self._send(uid, text)
+            else:
+                caption = (
+                    f"{prefix}"
+                    + self.get_text("daily_reward_claimed", lang)
+                    + "\n"
+                    + self.get_text(
+                        "daily_reward_rarity", lang,
+                        rarity=rarity or "unknown",
+                    )
+                )
+                if card_url:
+                    await self._send_photo(uid, card_url, caption)
+                else:
+                    await self._send(uid, caption)
+
     async def send_streamer_error(self, streamer, error):
         if not self.active:
             return
@@ -597,3 +646,18 @@ class TelegramBot:
                 )
         except Exception as e:
             logger.error(t("tg_send_failed", user_id=user_id, error=e))
+
+    async def _send_photo(self, user_id, photo_url, caption=""):
+        try:
+            if self.application:
+                await self.application.bot.send_photo(
+                    chat_id=user_id,
+                    photo=photo_url,
+                    caption=caption,
+                    parse_mode=ParseMode.HTML,
+                )
+        except Exception as e:
+            logger.error(t("tg_send_photo_failed", user_id=user_id, error=e))
+            # Fall back to a plain text message so the user still gets
+            # the notification even if the image failed to send.
+            await self._send(user_id, caption)

@@ -264,6 +264,40 @@ Notificaciones incluyen:
 
 ---
 
+### 🎯 Reclamo de Recompensa Diaria
+
+Revisa y reclama automáticamente el reto diario de gamificación de Kick (recompensa por tiempo de visualización + premio de ruleta), por cuenta, y puede publicar el resultado en Discord y/o Telegram.
+
+**Cómo funciona — sin intervalo fijo de revisión:**
+1. Al iniciar (o justo después de reclamar, o cuando empieza la ventana de un nuevo día), consulta una vez la API de Kick para saber cuántos minutos de visualización faltan.
+2. A partir de ahí, solo cuenta tiempo localmente mientras la cuenta está viendo efectivamente un stream. Si no se está viendo nada, el reto tampoco puede avanzar del lado de Kick, así que no llama a la API durante ese tiempo muerto.
+3. Cuando el tiempo acumulado alcanza lo que faltaba, vuelve a consultar — si ya está listo, lo reclama automáticamente y registra/notifica el resultado.
+4. Una vez reclamado por el día, deja de tocar la API por completo hasta que termine la ventana del reto actual, y solo vuelve a revisar cuando empiece la siguiente — sin peticiones desperdiciadas ni consultas innecesarias.
+
+**Configuración:**
+```json
+{
+  "ClaimDailyReward": {
+    "enabled": false,
+    "notify_discord": true,
+    "notify_telegram": true
+  }
+}
+```
+
+| Parámetro | Descripción |
+| :--- | :--- |
+| `enabled` | Activa/desactiva toda la función. Desactivado por defecto. |
+| `notify_discord` | Publica la recompensa reclamada en Discord (usa la config del webhook de `Discord` de arriba). |
+| `notify_telegram` | Publica la recompensa reclamada en Telegram (envía la carta de la recompensa como foto). |
+
+Cuando se reclama una recompensa, la notificación muestra:
+* 🎉 Confirmación de que el reto fue reclamado
+* 🏆 La rareza de la recompensa, con la imagen de la carta adjunta (cuando es una carta nueva)
+* 🎁 O, si ya tenías esa carta, cuántos minutos extra de visualización obtuviste para tu próximo nivel
+
+---
+
 ## 🖥️ Panel Web
 
 Si está habilitado, abre **`http://localhost:5000`** en tu navegador.

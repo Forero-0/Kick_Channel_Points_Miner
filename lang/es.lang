@@ -273,5 +273,27 @@
   "tg_language_supported": "Idiomas soportados: en, es, ru",
   "tg_miner_started": "🚀 <b>¡Miner iniciado!</b>\n\n",
 
-  "web_dashboard_available": "🌍 Panel web disponible en {url}"
+  "web_dashboard_available": "🌍 Panel web disponible en {url}",
+
+  "daily_challenge_json_error": "❌ Reto diario: error al parsear JSON: {error}",
+  "daily_challenge_401": "🔒 Reto diario: no autorizado (token expirado/inválido)",
+  "daily_challenge_fetch_failed": "❌ Reto diario: falló al obtener los retos (status {status})",
+  "daily_challenge_fetch_error": "❌ Reto diario: error al obtener los retos: {error}",
+  "daily_challenge_claim_failed": "❌ Reto diario: falló la petición de reclamo (status {status})",
+  "daily_challenge_claim_error": "❌ Reto diario: error al reclamar el reto: {error}",
+  "daily_challenge_none_found": "🎯 [{alias}] La API no devolvió retos diarios",
+  "daily_challenge_already_claimed": "🎯 [{alias}] Reto diario ya reclamado hoy",
+  "daily_challenge_in_progress": "🎯 [{alias}] Reto diario en progreso: {progress}/{threshold}",
+  "daily_challenge_claim_no_result": "⚠️ [{alias}] El reclamo del reto diario no devolvió datos",
+  "daily_challenge_claimed": "🎉 [{alias}] ¡Reto diario reclamado! Rareza de la recompensa: {rarity}",
+  "daily_challenge_loop_error": "❌ [{alias}] Error en el ciclo del reto diario: {error}",
+  "daily_challenge_consolation": "🎁 [{alias}] Ya tenías esta recompensa, obtuviste +{minutes} min de visualización para subir de nivel",
+
+  "tg_bot_connected_accounts": "📱 Bot de Telegram conectado a {count} cuenta(s)",
+  "tg_send_photo_failed": "❌ Telegram: falló al enviar la foto a {user_id}: {error}",
+
+  "discord_daily_reward_title": "🎯 Recompensa Diaria",
+  "discord_daily_reward_claimed": "✅ ¡Reto diario reclamado!",
+  "discord_daily_reward_rarity": "🏆 Rareza de la recompensa: **{rarity}**",
+  "discord_daily_reward_consolation": "🎁 Ya tenías esta recompensa. Obtuviste **+{minutes} min** de visualización para subir de nivel"
 }

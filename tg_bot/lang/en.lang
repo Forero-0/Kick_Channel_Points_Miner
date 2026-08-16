@@ -44,5 +44,8 @@
   "no_points_alert": "⚠️ No points received: {streamers}",
   "restarting_short": "🔄 Restarting...",
   "language_usage": "Usage: /language [en/es/ru]",
-  "language_supported": "Supported languages: en, es, ru"
+  "language_supported": "Supported languages: en, es, ru",
+  "daily_reward_claimed": "🎉 Daily challenge claimed!",
+  "daily_reward_rarity": "🏆 Reward rarity: {rarity}",
+  "daily_reward_consolation": "🎁 You already had this reward. You got +{minutes} min of watch time towards your next level instead"
 }

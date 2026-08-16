@@ -80,6 +80,7 @@ async def main():
             from tg_bot.bot import TelegramBot
             telegram_bot = TelegramBot(config)
             telegram_bot.set_account_manager(account_manager)
+            account_manager.set_tg_bot(telegram_bot)
             await telegram_bot.start()
         except Exception as e:
             logger.error(t("telegram_failed_to_start", error=e))

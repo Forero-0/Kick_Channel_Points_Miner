@@ -273,5 +273,27 @@
   "tg_language_supported": "Supported languages: en, es, ru",
   "tg_miner_started": "🚀 <b>Miner Started!</b>\n\n",
 
-  "web_dashboard_available": "🌍 Web Dashboard available at {url}"
+  "web_dashboard_available": "🌍 Web Dashboard available at {url}",
+
+  "daily_challenge_json_error": "❌ Daily challenge: JSON parsing error: {error}",
+  "daily_challenge_401": "🔒 Daily challenge: unauthorized (token expired/invalid)",
+  "daily_challenge_fetch_failed": "❌ Daily challenge: failed to fetch challenges (status {status})",
+  "daily_challenge_fetch_error": "❌ Daily challenge: error fetching challenges: {error}",
+  "daily_challenge_claim_failed": "❌ Daily challenge: claim request failed (status {status})",
+  "daily_challenge_claim_error": "❌ Daily challenge: error claiming challenge: {error}",
+  "daily_challenge_none_found": "🎯 [{alias}] No daily challenges returned by the API",
+  "daily_challenge_already_claimed": "🎯 [{alias}] Daily challenge already claimed today",
+  "daily_challenge_in_progress": "🎯 [{alias}] Daily challenge in progress: {progress}/{threshold}",
+  "daily_challenge_claim_no_result": "⚠️ [{alias}] Daily challenge claim returned no data",
+  "daily_challenge_claimed": "🎉 [{alias}] Daily challenge claimed! Reward rarity: {rarity}",
+  "daily_challenge_loop_error": "❌ [{alias}] Daily challenge loop error: {error}",
+  "daily_challenge_consolation": "🎁 [{alias}] You already had this reward, got +{minutes} min of watch time towards your next level instead",
+
+  "tg_bot_connected_accounts": "📱 Telegram bot connected to {count} account(s)",
+  "tg_send_photo_failed": "❌ Telegram: failed to send photo to {user_id}: {error}",
+
+  "discord_daily_reward_title": "🎯 Daily Reward",
+  "discord_daily_reward_claimed": "✅ Daily challenge claimed!",
+  "discord_daily_reward_rarity": "🏆 Reward rarity: **{rarity}**",
+  "discord_daily_reward_consolation": "🎁 You already had this reward. You got **+{minutes} min** of watch time towards your next level instead"
 }

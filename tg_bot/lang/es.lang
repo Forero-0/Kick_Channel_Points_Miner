@@ -44,5 +44,8 @@
   "no_points_alert": "⚠️ Sin puntos recibidos: {streamers}",
   "restarting_short": "🔄 Reiniciando...",
   "language_usage": "Uso: /language [en/es/ru]",
-  "language_supported": "Idiomas soportados: en, es, ru"
+  "language_supported": "Idiomas soportados: en, es, ru",
+  "daily_reward_claimed": "🎉 ¡Reto diario reclamado!",
+  "daily_reward_rarity": "🏆 Rareza de la recompensa: {rarity}",
+  "daily_reward_consolation": "🎁 Ya tenías esta recompensa. Obtuviste +{minutes} min de visualización para subir de nivel"
 }

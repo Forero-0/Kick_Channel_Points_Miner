@@ -273,5 +273,27 @@
   "tg_language_supported": "Поддерживаемые языки: en, es, ru",
   "tg_miner_started": "🚀 <b>Майнер запущен!</b>\n\n",
 
-  "web_dashboard_available": "🌍 Web Dashboard доступен по адресу {url}"
+  "web_dashboard_available": "🌍 Web Dashboard доступен по адресу {url}",
+
+  "daily_challenge_json_error": "❌ Ежедневное задание: ошибка разбора JSON: {error}",
+  "daily_challenge_401": "🔒 Ежедневное задание: нет доступа (токен истёк/недействителен)",
+  "daily_challenge_fetch_failed": "❌ Ежедневное задание: не удалось получить список заданий (статус {status})",
+  "daily_challenge_fetch_error": "❌ Ежедневное задание: ошибка при получении заданий: {error}",
+  "daily_challenge_claim_failed": "❌ Ежедневное задание: запрос на получение награды не удался (статус {status})",
+  "daily_challenge_claim_error": "❌ Ежедневное задание: ошибка при получении награды: {error}",
+  "daily_challenge_none_found": "🎯 [{alias}] API не вернул ежедневных заданий",
+  "daily_challenge_already_claimed": "🎯 [{alias}] Ежедневное задание уже получено сегодня",
+  "daily_challenge_in_progress": "🎯 [{alias}] Ежедневное задание в процессе: {progress}/{threshold}",
+  "daily_challenge_claim_no_result": "⚠️ [{alias}] Получение награды не вернуло данных",
+  "daily_challenge_claimed": "🎉 [{alias}] Ежедневное задание получено! Редкость награды: {rarity}",
+  "daily_challenge_loop_error": "❌ [{alias}] Ошибка в цикле ежедневного задания: {error}",
+  "daily_challenge_consolation": "🎁 [{alias}] У вас уже была эта награда, вы получили +{minutes} мин. времени просмотра для повышения уровня",
+
+  "tg_bot_connected_accounts": "📱 Telegram-бот подключён к {count} аккаунт(ам)",
+  "tg_send_photo_failed": "❌ Telegram: не удалось отправить фото пользователю {user_id}: {error}",
+
+  "discord_daily_reward_title": "🎯 Ежедневная награда",
+  "discord_daily_reward_claimed": "✅ Ежедневное задание получено!",
+  "discord_daily_reward_rarity": "🏆 Редкость награды: **{rarity}**",
+  "discord_daily_reward_consolation": "🎁 У вас уже была эта награда. Вы получили **+{minutes} мин.** времени просмотра для повышения уровня"
 }

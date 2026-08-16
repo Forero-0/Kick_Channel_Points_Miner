@@ -433,6 +433,58 @@ class DiscordWebhook:
         payload = self._build_payload([embed])
         self._send_raw(payload)
 
+    def send_daily_reward_claimed(
+        self,
+        account_alias: str,
+        rarity: str = None,
+        card_url: str = None,
+        watch_time_minutes: int = None,
+        already_owned: bool = False,
+    ):
+        """
+        Notification: Kick daily gamification challenge claimed.
+
+        already_owned=True  -> Kick returned a "consolation" payload
+                                (you already had this card, you got
+                                {watch_time_minutes} min of level progress
+                                instead).
+        already_owned=False -> a new card was won; rarity/card_url describe
+                                the reward and card_url is shown as an image.
+        """
+        if not self.enabled:
+            return
+
+        if already_owned:
+            embed = self._embed(
+                title=t("discord_daily_reward_title"),
+                description=t(
+                    "discord_daily_reward_consolation",
+                    minutes=watch_time_minutes,
+                ),
+                color=self.color_info,
+                fields=[
+                    self._field(t("discord_field_account"), account_alias),
+                ],
+            )
+        else:
+            embed = self._embed(
+                title=t("discord_daily_reward_title"),
+                description=(
+                    f"{t('discord_daily_reward_claimed')}\n"
+                    f"{t('discord_daily_reward_rarity', rarity=rarity)}"
+                ),
+                color=self.color_success,
+                fields=[
+                    self._field(t("discord_field_account"), account_alias),
+                ],
+                thumbnail_url=None,
+            )
+            if card_url:
+                embed["image"] = {"url": card_url}
+
+        payload = self._build_payload([embed])
+        self._send_in_thread(payload)
+
     def send_custom(
         self,
         title: str,

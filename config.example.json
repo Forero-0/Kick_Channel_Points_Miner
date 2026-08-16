@@ -29,10 +29,16 @@
     "color_warning": 16763904,
     "color_error": 15746887
   },
-  
+
   "Proxy": {
     "enabled": false,
     "url": "socks5://user:password@host:port"
+  },
+
+  "ClaimDailyReward": {
+    "enabled": false,
+    "notify_discord": true,
+    "notify_telegram": true
   },
 
   "Accounts": [
