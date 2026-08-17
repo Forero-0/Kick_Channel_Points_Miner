@@ -736,12 +736,9 @@ class AccountManager:
         # whether it includes the card photo) is configured per-channel
         # under Discord.notify_daily_reward / Discord.send_photo and
         # Telegram.notify_daily_reward / Telegram.send_photo instead.
-        daily_challenge_cfg = config.get("ClaimDailyReward", {})
-        if isinstance(daily_challenge_cfg, bool):
-            # Allow "ClaimDailyReward": true/false as a shorthand too.
-            daily_challenge_enabled = daily_challenge_cfg
-        else:
-            daily_challenge_enabled = daily_challenge_cfg.get("enabled", False)
+        daily_challenge_enabled = config.get("ClaimDailyReward", False)
+        if not isinstance(daily_challenge_enabled, bool):
+            daily_challenge_enabled = False
 
         # Backward compatibility with the old single-account config format
         accounts = config.get("Accounts", [])
