@@ -65,8 +65,6 @@ class AccountWorker:
         stagger_min: float = 3.0,
         stagger_max: float = 8.0,
         daily_challenge_enabled: bool = False,
-        daily_challenge_notify_discord: bool = True,
-        daily_challenge_notify_telegram: bool = True,
     ):
         self.alias = account_cfg["alias"]
         self.token = account_cfg["token"]
@@ -77,8 +75,6 @@ class AccountWorker:
         self.stagger_min = stagger_min
         self.stagger_max = stagger_max
         self.daily_challenge_enabled = daily_challenge_enabled
-        self.daily_challenge_notify_discord = daily_challenge_notify_discord
-        self.daily_challenge_notify_telegram = daily_challenge_notify_telegram
 
         # Internal-only, not configurable: how often (seconds) the loop
         # wakes up to check "are we watching something right now" and add
@@ -472,9 +468,14 @@ class AccountWorker:
     def _notify_daily_reward(self, outcome: dict):
         """
         Sends the Discord / Telegram notifications for a claimed daily
-        reward, based on the ClaimDailyReward.notify_discord /
-        notify_telegram flags. `outcome` is the "claimed": True branch
-        returned by DailyChallenge.check_and_claim().
+        reward. `outcome` is the "claimed": True branch returned by
+        DailyChallenge.check_and_claim().
+
+        Whether each channel actually sends anything (and whether it
+        includes the reward card photo) is decided by that channel's own
+        notifier (Telegram.notify_daily_reward / send_photo,
+        Discord.notify_daily_reward / send_photo) — this only forwards
+        the event to both.
         """
         result = outcome.get("result") or {}
         consolation = result.get("consolation")
@@ -499,7 +500,7 @@ class AccountWorker:
                 alias=self.alias, rarity=rarity,
             ))
 
-        if self._discord and self.daily_challenge_notify_discord:
+        if self._discord:
             self._discord.send_daily_reward_claimed(
                 self.alias,
                 rarity=rarity,
@@ -508,7 +509,7 @@ class AccountWorker:
                 already_owned=already_owned,
             )
 
-        if self._tg_bot and self.daily_challenge_notify_telegram:
+        if self._tg_bot:
             self._tg_bot.send_daily_reward_claimed(
                 self.alias,
                 rarity=rarity,
@@ -730,14 +731,17 @@ class AccountManager:
         stagger_min = config.get("Connection_stagger_min", 3)
         stagger_max = config.get("Connection_stagger_max", 8)
 
+        # ClaimDailyReward is now a single on/off switch. Whether the
+        # claimed-reward event gets posted to Discord/Telegram (and
+        # whether it includes the card photo) is configured per-channel
+        # under Discord.notify_daily_reward / Discord.send_photo and
+        # Telegram.notify_daily_reward / Telegram.send_photo instead.
         daily_challenge_cfg = config.get("ClaimDailyReward", {})
-        daily_challenge_enabled = daily_challenge_cfg.get("enabled", False)
-        daily_challenge_notify_discord = daily_challenge_cfg.get(
-            "notify_discord", True
-        )
-        daily_challenge_notify_telegram = daily_challenge_cfg.get(
-            "notify_telegram", True
-        )
+        if isinstance(daily_challenge_cfg, bool):
+            # Allow "ClaimDailyReward": true/false as a shorthand too.
+            daily_challenge_enabled = daily_challenge_cfg
+        else:
+            daily_challenge_enabled = daily_challenge_cfg.get("enabled", False)
 
         # Backward compatibility with the old single-account config format
         accounts = config.get("Accounts", [])
@@ -766,8 +770,6 @@ class AccountManager:
                     stagger_min=stagger_min,
                     stagger_max=stagger_max,
                     daily_challenge_enabled=daily_challenge_enabled,
-                    daily_challenge_notify_discord=daily_challenge_notify_discord,
-                    daily_challenge_notify_telegram=daily_challenge_notify_telegram,
                 )
             )
 

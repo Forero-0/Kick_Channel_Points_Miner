@@ -5,19 +5,30 @@
   "Telegram": {
     "enabled": false,
     "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
-    "chat_id": "YOUR_TELEGRAM_USER_ID"
+    "chat_id": "YOUR_TELEGRAM_USER_ID",
+    "notify_points": true,
+    "notify_status_change": true,
+    "notify_errors": true,
+    "notify_startup": true,
+    "notify_restart": true,
+    "notify_daily_reward": true,
+    "min_points_gain": 10,
+    "send_photo": false
   },
 
   "Discord": {
     "enabled": false,
     "webhook_url": "https://discord.com/api/webhooks/XXXX/YYYY",
-    "username": "Baillora KickMiner",
+    "username": "KickMiner",
     "avatar_url": "",
     "notify_points": true,
     "notify_status_change": true,
     "notify_errors": true,
     "notify_startup": true,
+    "notify_restart": true,
+    "notify_daily_reward": true,
     "min_points_gain": 10,
+    "send_photo": false,
     "color_success": 3461464,
     "color_info": 5793266,
     "color_warning": 16763904,
@@ -29,11 +40,7 @@
     "url": "socks5://user:password@host:port"
   },
 
-  "ClaimDailyReward": {
-    "enabled": false,
-    "notify_discord": true,
-    "notify_telegram": true
-  },
+  "ClaimDailyReward": false,
 
   "Accounts": [
     {

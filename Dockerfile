@@ -15,7 +15,7 @@ FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="Kick Channel Points Miner" \
       org.opencontainers.image.description="Automated Kick channel-points farmer" \
-      org.opencontainers.image.source="https://github.com/Baillora/Kick_Channel_Points_Miner"
+      org.opencontainers.image.source="https://github.com/Forero-0/Kick_Channel_Points_Miner"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libcurl4 \

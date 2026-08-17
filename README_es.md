@@ -27,7 +27,7 @@ Un potente bot asíncrono para farmear automáticamente puntos de canal en **Kic
 
 1.  **Clona o descarga** el repositorio:
     ```bash
-    git clone https://github.com/Baillora/Kick_Channel_Points_Miner.git
+    git clone https://github.com/Forero-0/Kick_Channel_Points_Miner.git
     cd Kick_Channel_Points_Miner
     ```
 
@@ -52,19 +52,30 @@ Un potente bot asíncrono para farmear automáticamente puntos de canal en **Kic
   "Telegram": {
     "enabled": false,
     "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
-    "chat_id": "YOUR_TELEGRAM_USER_ID"
+    "chat_id": "YOUR_TELEGRAM_USER_ID",
+    "notify_points": true,
+    "notify_status_change": true,
+    "notify_errors": true,
+    "notify_startup": true,
+    "notify_restart": true,
+    "notify_daily_reward": true,
+    "min_points_gain": 10,
+    "send_photo": false
   },
 
   "Discord": {
     "enabled": false,
     "webhook_url": "https://discord.com/api/webhooks/XXXX/YYYY",
-    "username": "Baillora KickMiner",
+    "username": "KickMiner",
     "avatar_url": "",
     "notify_points": true,
     "notify_status_change": true,
     "notify_errors": true,
     "notify_startup": true,
+    "notify_restart": true,
+    "notify_daily_reward": true,
     "min_points_gain": 10,
+    "send_photo": false,
     "color_success": 3461464,
     "color_info": 5793266,
     "color_warning": 16763904,
@@ -122,7 +133,10 @@ El antiguo formato de una sola cuenta se convierte automáticamente:
 *   **`Debug`**: `true` para logs detallados, `false` para salida limpia.
 *   **`Telegram`**:
     *   `bot_token`: Consíguelo de @BotFather.
-    *   `chat_id`: Tu ID de chat/usuario personal de Telegram. El bot envía todas las notificaciones aquí.
+    *   `chat_id`: Tu ID de chat/usuario personal de Telegram.
+    *   `notify_points` / `notify_status_change` / `notify_errors` / `notify_startup` / `notify_restart` / `notify_daily_reward`: Activa/desactiva qué tipos de evento se envían a Telegram. Todos en `true` (enviar todo) por defecto.
+    *   `min_points_gain`: Ganancia mínima de puntos para disparar una notificación `notify_points`.
+    *   `send_photo`: Si se envía la imagen de la carta de recompensa diaria como foto real. `false` por defecto (solo texto); ponlo en `true` si también quieres la imagen.
 *   **`Proxy.enabled`**: Activa proxy global para todas las cuentas.
     *   `Proxy.url`: URL del proxy (`socks5://`, `http://`, `https://`).
 *   **`Check_interval`**: Segundos entre comprobaciones de estado (por defecto: `120`).
@@ -183,15 +197,49 @@ El bot:
 
 ### 📱 Notificaciones de Telegram
 
-La integración con Telegram es **solo de envío**: manda notificaciones tipo log a `chat_id`, igual que el webhook de Discord publica en un canal. Nunca escucha actualizaciones y no tiene comandos que escribir — no hay nada que configurar además de `bot_token` y `chat_id`.
+La integración con Telegram es **solo de envío**: manda notificaciones tipo log a `chat_id`, igual que el webhook de Discord publica en un canal. Nunca escucha actualizaciones y no tiene comandos que escribir.
+
+**Configuración:**
+```json
+{
+  "Telegram": {
+    "enabled": true,
+    "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
+    "chat_id": "YOUR_TELEGRAM_USER_ID",
+    "notify_points": true,
+    "notify_status_change": true,
+    "notify_errors": true,
+    "notify_startup": true,
+    "notify_restart": true,
+    "notify_daily_reward": true,
+    "min_points_gain": 10,
+    "send_photo": false
+  }
+}
+```
+
+| Parámetro | Descripción |
+| :--- | :--- |
+| `bot_token` | Consíguelo de @BotFather |
+| `chat_id` | Tu ID de chat/usuario personal de Telegram |
+| `notify_points` | Notificar cuando se ganen puntos |
+| `notify_status_change` | Notificar cambios de estado de streamers |
+| `notify_errors` | Notificar errores |
+| `notify_startup` | Resumen al iniciar |
+| `notify_restart` | Notificar cuando el miner se detiene/reinicia |
+| `notify_daily_reward` | Notificar recompensas del reto diario |
+| `min_points_gain` | Umbral mínimo de puntos para notificar |
+| `send_photo` | Envía la carta de recompensa diaria como foto real. `false` (solo texto) por defecto |
+
+Todos los flags `notify_*` están en `true` por defecto — por defecto se envía todo. Pon cualquiera en `false` para silenciar solo ese tipo de evento, igual que funcionan los flags de Discord.
 
 Recibirás un mensaje por:
-*   🚀 Inicio del miner (cuentas y streamers cargados)
-*   💰 Puntos ganados por streamer
-*   👁 Cambios de estado de streamers (empieza a ver / desplazado / online / offline)
-*   ❌ Errores
-*   🎉 Recompensas del reto diario reclamadas (si está habilitado, con la imagen de la carta)
-*   🔄 Reinicios
+*   🚀 Inicio del miner (cuentas y streamers cargados) — si `notify_startup`
+*   💰 Puntos ganados por streamer — si `notify_points`
+*   👁 Cambios de estado de streamers (empieza a ver / desplazado / online / offline) — si `notify_status_change`
+*   ❌ Errores — si `notify_errors`
+*   🎉 Recompensas del reto diario reclamadas (si `ClaimDailyReward` está activo y `notify_daily_reward` es true; incluye la imagen de la carta solo si `send_photo` es true)
+*   🔄 Reinicios/detenciones — si `notify_restart` (se envía de forma síncrona justo antes de que el proceso termine, así que llega de forma fiable incluso al detener el bot con Ctrl+C)
 
 ---
 
@@ -210,13 +258,16 @@ Envía notificaciones en tiempo real a cualquier canal de Discord mediante webho
   "Discord": {
     "enabled": true,
     "webhook_url": "https://discord.com/api/webhooks/XXXX/YYYY",
-    "username": "Baillora KickMiner",
+    "username": "KickMiner",
     "avatar_url": "",
     "notify_points": true,
     "notify_status_change": true,
     "notify_errors": true,
     "notify_startup": true,
+    "notify_restart": true,
+    "notify_daily_reward": true,
     "min_points_gain": 10,
+    "send_photo": false,
     "color_success": 3461464,
     "color_info": 5793266,
     "color_warning": 16763904,
@@ -234,23 +285,27 @@ Envía notificaciones en tiempo real a cualquier canal de Discord mediante webho
 | `notify_status_change` | Notificar cambios de estado de streamers |
 | `notify_errors` | Notificar errores |
 | `notify_startup` | Resumen al iniciar |
+| `notify_restart` | Notificar cuando el miner se detiene/reinicia |
+| `notify_daily_reward` | Notificar recompensas del reto diario |
 | `min_points_gain` | Umbral mínimo para notificar |
+| `send_photo` | Envía la carta de recompensa diaria como imagen real. `false` (solo texto) por defecto |
 | `color_*` | Colores en decimal (usar un conversor de hex a decimal)
 
 Notificaciones incluyen:
 
-* 🚀 Resumen de inicio con todas las cuentas
-* 💰 Puntos ganados (con enlace al streamer)
-* ▶️ Inicio de watch / ⏹ Desplazamiento por prioridad
-* 🟢 Streamer online / 🔴 Streamer offline
-* ❌ Reportes de errores
-* 🔄 Notificaciones de reinicio
+* 🚀 Resumen de inicio con todas las cuentas — si `notify_startup`
+* 💰 Puntos ganados (con enlace al streamer) — si `notify_points`
+* ▶️ Inicio de watch / ⏹ Desplazamiento por prioridad — si `notify_status_change`
+* 🟢 Streamer online / 🔴 Streamer offline — si `notify_status_change`
+* ❌ Reportes de errores — si `notify_errors`
+* 🎉 Recompensa del reto diario reclamada — si `notify_daily_reward` (imagen adjunta solo si `send_photo` es true)
+* 🔄 Notificaciones de reinicio/detención — si `notify_restart`
 
 ---
 
 ### 🎯 Reclamo de Recompensa Diaria
 
-Revisa y reclama automáticamente el reto diario de gamificación de Kick (recompensa por tiempo de visualización + premio de ruleta), por cuenta, y puede publicar el resultado en Discord y/o Telegram.
+Revisa y reclama automáticamente el reto diario de gamificación de Kick (recompensa por tiempo de visualización + premio de ruleta), por cuenta, y publica el resultado en Discord y/o Telegram (sujeto a la configuración `notify_daily_reward` / `send_photo` de cada canal, ver arriba).
 
 **Cómo funciona — sin intervalo fijo de revisión:**
 1. Al iniciar (o justo después de reclamar, o cuando empieza la ventana de un nuevo día), consulta una vez la API de Kick para saber cuántos minutos de visualización faltan.
@@ -261,24 +316,18 @@ Revisa y reclama automáticamente el reto diario de gamificación de Kick (recom
 **Configuración:**
 ```json
 {
-  "ClaimDailyReward": {
-    "enabled": false,
-    "notify_discord": true,
-    "notify_telegram": true
-  }
+  "ClaimDailyReward": false
 }
 ```
 
-| Parámetro | Descripción |
-| :--- | :--- |
-| `enabled` | Activa/desactiva toda la función. Desactivado por defecto. |
-| `notify_discord` | Publica la recompensa reclamada en Discord (usa la config del webhook de `Discord` de arriba). |
-| `notify_telegram` | Publica la recompensa reclamada en Telegram (envía la carta de la recompensa como foto). |
+`ClaimDailyReward` es un simple interruptor on/off — `true` activa la función, `false` (por defecto) la desactiva. Ya no hay nada más dentro de esta clave. Si el evento de recompensa reclamada se publica en Discord/Telegram, y si incluye la foto de la carta, lo controla la configuración propia de cada canal (`notify_daily_reward` / `send_photo`, ver las secciones de Telegram y Discord arriba) — activado por defecto para las notificaciones, desactivado por defecto para la foto.
+
+> El formato antiguo `{"enabled": false}` se sigue aceptando por compatibilidad, pero el booleano simple de arriba es ahora el formato recomendado.
 
 Cuando se reclama una recompensa, la notificación muestra:
 * 🎉 Confirmación de que el reto fue reclamado
-* 🏆 La rareza de la recompensa, con la imagen de la carta adjunta (cuando es una carta nueva)
-* 🎁 O, si ya tenías esa carta, cuántos minutos extra de visualización obtuviste para tu próximo nivel
+* 🏆 La rareza de la recompensa, con la imagen de la carta adjunta solo si `send_photo` de ese canal es `true`
+* 🎁 O, si ya tenías esa carta, cuántos minutos extra de tiempo de visualización obtuviste para tu siguiente nivel
 
 ---
 

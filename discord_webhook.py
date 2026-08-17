@@ -38,9 +38,19 @@ class DiscordWebhook:
         self.notify_startup = discord_cfg.get(
             "notify_startup", True
         )
+        self.notify_restart = discord_cfg.get(
+            "notify_restart", True
+        )
+        self.notify_daily_reward = discord_cfg.get(
+            "notify_daily_reward", True
+        )
         self.min_points_gain = discord_cfg.get(
             "min_points_gain", 10
         )
+
+        # Whether to attach the daily-reward card image. Off by default;
+        # the user opts in per-channel (Discord/Telegram) independently.
+        self.send_photo = discord_cfg.get("send_photo", False)
 
         # Colors (decimal)
         self.color_success = discord_cfg.get(
@@ -421,7 +431,7 @@ class DiscordWebhook:
 
     def send_restart(self, reason: str = "Manual"):
         """Notification: restart"""
-        if not self.enabled:
+        if not self.enabled or not self.notify_restart:
             return
 
         embed = self._embed(
@@ -449,9 +459,10 @@ class DiscordWebhook:
                                 {watch_time_minutes} min of level progress
                                 instead).
         already_owned=False -> a new card was won; rarity/card_url describe
-                                the reward and card_url is shown as an image.
+                                the reward and card_url is shown as an image
+                                only if `send_photo` is enabled.
         """
-        if not self.enabled:
+        if not self.enabled or not self.notify_daily_reward:
             return
 
         if already_owned:
@@ -479,7 +490,7 @@ class DiscordWebhook:
                 ],
                 thumbnail_url=None,
             )
-            if card_url:
+            if card_url and self.send_photo:
                 embed["image"] = {"url": card_url}
 
         payload = self._build_payload([embed])

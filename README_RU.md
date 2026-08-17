@@ -27,7 +27,7 @@
 
 1.  **Клонируйте** репозиторий:
     ```bash
-    git clone https://github.com/Baillora/Kick_Channel_Points_Miner.git
+    git clone https://github.com/Forero-0/Kick_Channel_Points_Miner.git
     cd Kick_Channel_Points_Miner
     ```
 
@@ -52,19 +52,30 @@
   "Telegram": {
     "enabled": false,
     "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
-    "chat_id": "YOUR_TELEGRAM_USER_ID"
+    "chat_id": "YOUR_TELEGRAM_USER_ID",
+    "notify_points": true,
+    "notify_status_change": true,
+    "notify_errors": true,
+    "notify_startup": true,
+    "notify_restart": true,
+    "notify_daily_reward": true,
+    "min_points_gain": 10,
+    "send_photo": false
   },
 
   "Discord": {
     "enabled": false,
     "webhook_url": "https://discord.com/api/webhooks/XXXX/YYYY",
-    "username": "Baillora KickMiner",
+    "username": "KickMiner",
     "avatar_url": "",
     "notify_points": true,
     "notify_status_change": true,
     "notify_errors": true,
     "notify_startup": true,
+    "notify_restart": true,
+    "notify_daily_reward": true,
     "min_points_gain": 10,
+    "send_photo": false,
     "color_success": 3461464,
     "color_info": 5793266,
     "color_warning": 16763904,
@@ -122,7 +133,10 @@
 *   **`Debug`**: Установить `"true"` для дополнительных логов, `"false"` для чистого вывода.
 *   **`Telegram`**:
     *   `bot_token`: Получите это от @BotFather.
-    *   `chat_id`: Ваш личный chat/user ID в Telegram. Бот отправляет все уведомления сюда.
+    *   `chat_id`: Ваш личный chat/user ID в Telegram.
+    *   `notify_points` / `notify_status_change` / `notify_errors` / `notify_startup` / `notify_restart` / `notify_daily_reward`: включают/выключают отправку каждого типа события в Telegram. По умолчанию все `true` (отправлять всё).
+    *   `min_points_gain`: минимальный прирост поинтов для отправки уведомления `notify_points`.
+    *   `send_photo`: отправлять ли картинку карточки ежедневной награды как настоящее фото. По умолчанию `false` (только текст); поставьте `true`, если хотите и картинку.
 *   **`Proxy.enabled`**: Включить глобальный прокси-сервер для всех учетных записей.
     *   `Proxy.url`: Глобальный URL-адрес прокси-сервера (`socks5://`, `http://`, `https://`).
 *   **`Check_interval`**: Секунды между проверками состояния в режиме онлайн (по умолчанию: `120`).
@@ -185,15 +199,49 @@ python main.py
 
 ### 📱 Уведомления в Telegram
 
-Интеграция с Telegram работает **только на отправку**: она посылает лог-уведомления на `chat_id`, точно так же, как вебхук Discord публикует сообщения в канал. Бот никогда не слушает обновления, и в нём нет команд для ввода — настраивать нужно только `bot_token` и `chat_id`.
+Интеграция с Telegram работает **только на отправку**: она посылает лог-уведомления на `chat_id`, точно так же, как вебхук Discord публикует сообщения в канал. Бот никогда не слушает обновления, и в нём нет команд для ввода.
+
+**Конфигурация:**
+```json
+{
+  "Telegram": {
+    "enabled": true,
+    "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
+    "chat_id": "YOUR_TELEGRAM_USER_ID",
+    "notify_points": true,
+    "notify_status_change": true,
+    "notify_errors": true,
+    "notify_startup": true,
+    "notify_restart": true,
+    "notify_daily_reward": true,
+    "min_points_gain": 10,
+    "send_photo": false
+  }
+}
+```
+
+| Параметр | Описание |
+| :--- | :--- |
+| `bot_token` | Получите это от @BotFather |
+| `chat_id` | Ваш личный chat/user ID в Telegram |
+| `notify_points` | Уведомлять при начислении поинтов |
+| `notify_status_change` | Уведомлять об изменении статуса стримеров |
+| `notify_errors` | Уведомлять об ошибках |
+| `notify_startup` | Сводка при запуске |
+| `notify_restart` | Уведомлять при остановке/перезапуске майнера |
+| `notify_daily_reward` | Уведомлять о наградах ежедневного задания |
+| `min_points_gain` | Минимальный прирост поинтов для уведомления |
+| `send_photo` | Отправлять карточку ежедневной награды как настоящее фото. По умолчанию `false` (только текст) |
+
+Все флаги `notify_*` по умолчанию `true` — по умолчанию отправляется всё. Поставьте любой из них в `false`, чтобы отключить только этот тип события, точно так же, как работают флаги Discord.
 
 Вы будете получать сообщения о:
-*   🚀 Запуске майнера (загруженные аккаунты и стримеры)
-*   💰 Начисленных поинтах по каждому стримеру
-*   👁 Изменении статуса стримера (начал просмотр / вытеснен / онлайн / офлайн)
-*   ❌ Ошибках
-*   🎉 Полученных наградах ежедневного задания (если включено, с картинкой карточки)
-*   🔄 Перезапусках
+*   🚀 Запуске майнера (загруженные аккаунты и стримеры) — если `notify_startup`
+*   💰 Начисленных поинтах по каждому стримеру — если `notify_points`
+*   👁 Изменении статуса стримера (начал просмотр / вытеснен / онлайн / офлайн) — если `notify_status_change`
+*   ❌ Ошибках — если `notify_errors`
+*   🎉 Полученных наградах ежедневного задания (если `ClaimDailyReward` включен и `notify_daily_reward` равен true; картинка карточки прикладывается только если `send_photo` равен true)
+*   🔄 Остановках/перезапусках — если `notify_restart` (отправляется синхронно прямо перед завершением процесса, поэтому надёжно доходит даже при остановке бота через Ctrl+C)
 
 ---
 
@@ -212,13 +260,16 @@ python main.py
   "Discord": {
     "enabled": true,
     "webhook_url": "https://discord.com/api/webhooks/XXXX/YYYY",
-    "username": "Baillora KickMiner",
+    "username": "KickMiner",
     "avatar_url": "",
     "notify_points": true,
     "notify_status_change": true,
     "notify_errors": true,
     "notify_startup": true,
+    "notify_restart": true,
+    "notify_daily_reward": true,
     "min_points_gain": 10,
+    "send_photo": false,
     "color_success": 3461464,
     "color_info": 5793266,
     "color_warning": 16763904,
@@ -236,23 +287,27 @@ python main.py
 | `notify_status_change` | Уведомления об изменении статуса стримеров |
 | `notify_errors` | Уведомления об ошибках |
 | `notify_startup` | Сводка при запуске |
+| `notify_restart` | Уведомлять при остановке/перезапуске майнера |
+| `notify_daily_reward` | Уведомлять о наградах ежедневного задания |
 | `min_points_gain` | Минимальное начисление для уведомления |
+| `send_photo` | Отправлять карточку ежедневной награды как настоящую картинку. По умолчанию `false` (только текст) |
 | `color_*` | 	Преобразуйте цвета в десятичную форму (используйте [color converter](https://www.mathsisfun.com/hexadecimal-decimal-colors.html)) |
 
 Notifications include:
 
-* 🚀 Сводка при запуске со всеми аккаунтами
-* 💰 Начисление поинтов (со ссылкой на стример)
-* ▶️ Начало просмотра / ⏹ Вытеснение по приоритету
-* 🟢 Стример онлайн / 🔴 Стример оффлайн
-* ❌ Отчёты об ошибках
-* 🔄 Уведомления о перезапуске
+* 🚀 Сводка при запуске со всеми аккаунтами — если `notify_startup`
+* 💰 Начисление поинтов (со ссылкой на стример) — если `notify_points`
+* ▶️ Начало просмотра / ⏹ Вытеснение по приоритету — если `notify_status_change`
+* 🟢 Стример онлайн / 🔴 Стример оффлайн — если `notify_status_change`
+* ❌ Отчёты об ошибках — если `notify_errors`
+* 🎉 Получена награда ежедневного задания — если `notify_daily_reward` (картинка прикладывается только если `send_photo` равен true)
+* 🔄 Уведомления о перезапуске/остановке — если `notify_restart`
 
 ---
 
 ### 🎯 Получение ежедневной награды
 
-Автоматически проверяет и получает ежедневное игровое задание Kick (награда за время просмотра + приз рулетки) для каждого аккаунта, и может публиковать результат в Discord и/или Telegram.
+Автоматически проверяет и получает ежедневное игровое задание Kick (награда за время просмотра + приз рулетки) для каждого аккаунта, и публикует результат в Discord и/или Telegram (в зависимости от настроек `notify_daily_reward` / `send_photo` каждого канала, см. выше).
 
 **Как это работает — без фиксированного интервала опроса:**
 1. При запуске (а также сразу после получения награды или в начале окна нового дня) один раз запрашивается API Kick, чтобы узнать, сколько минут просмотра ещё не хватает.
@@ -263,23 +318,17 @@ Notifications include:
 **Конфигурация:**
 ```json
 {
-  "ClaimDailyReward": {
-    "enabled": false,
-    "notify_discord": true,
-    "notify_telegram": true
-  }
+  "ClaimDailyReward": false
 }
 ```
 
-| Параметр | Описание |
-| :--- | :--- |
-| `enabled` | Включает/выключает всю функцию. По умолчанию выключено. |
-| `notify_discord` | Публиковать полученную награду в Discord (использует настройки webhook `Discord` выше). |
-| `notify_telegram` | Публиковать полученную награду в Telegram (отправляет карточку награды как фото). |
+`ClaimDailyReward` — это простой переключатель вкл/выкл: `true` включает функцию, `false` (по умолчанию) выключает. Больше внутри этого ключа ничего нет. Публикуется ли событие полученной награды в Discord/Telegram и прикладывается ли к нему картинка карточки, определяется настройками самого канала (`notify_daily_reward` / `send_photo`, см. разделы Telegram и Discord выше) — по умолчанию уведомления включены, а фото выключено.
+
+> Старый формат объекта `{"enabled": false}` по-прежнему поддерживается для обратной совместимости, но рекомендуемый формат теперь — простой булев тип, как показано выше.
 
 При получении награды уведомление показывает:
 * 🎉 Подтверждение получения задания
-* 🏆 Редкость награды с прикреплённым изображением карточки (если это новая карточка)
+* 🏆 Редкость награды с прикреплённым изображением карточки, только если `send_photo` этого канала равен `true`
 * 🎁 Или, если карточка уже была у вас, сколько дополнительных минут просмотра вы получили для следующего уровня
 
 ---

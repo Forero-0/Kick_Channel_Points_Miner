@@ -37,6 +37,21 @@ class TelegramBot:
         self.token = tg_cfg.get("bot_token", "")
         self.chat_id = tg_cfg.get("chat_id")
 
+        # Which notification types to send (all on by default, same
+        # semantics as DiscordWebhook's notify_* flags).
+        self.notify_points = tg_cfg.get("notify_points", True)
+        self.notify_status = tg_cfg.get("notify_status_change", True)
+        self.notify_errors = tg_cfg.get("notify_errors", True)
+        self.notify_startup = tg_cfg.get("notify_startup", True)
+        self.notify_restart = tg_cfg.get("notify_restart", True)
+        self.notify_daily_reward = tg_cfg.get("notify_daily_reward", True)
+        self.min_points_gain = tg_cfg.get("min_points_gain", 10)
+
+        # Whether to send the daily-reward card as an actual photo.
+        # Off by default so Telegram only sends text unless the user
+        # opts in.
+        self.send_photo = tg_cfg.get("send_photo", False)
+
         # Rate limiting
         self._last_send_time = 0.0
         self._min_interval = 1.0
@@ -96,12 +111,16 @@ class TelegramBot:
         )
         thread.start()
 
-    def _send_message(self, text: str):
-        self._send_in_thread("sendMessage", {
+    def _send_message(self, text: str, blocking: bool = False):
+        payload = {
             "chat_id": self.chat_id,
             "text": text,
             "parse_mode": "HTML",
-        })
+        }
+        if blocking:
+            self._post("sendMessage", payload)
+        else:
+            self._send_in_thread("sendMessage", payload)
 
     def _send_photo(self, photo_url: str, caption: str = ""):
         self._send_in_thread("sendPhoto", {
@@ -115,7 +134,7 @@ class TelegramBot:
 
     def send_startup(self, accounts: List[dict]):
         """Notification: miner started"""
-        if not self.enabled:
+        if not self.enabled or not self.notify_startup:
             return
 
         lines = [t("tg_startup_title"), ""]
@@ -140,11 +159,11 @@ class TelegramBot:
         self, account_alias, streamer, old_amount, new_amount,
     ):
         """Notification: points earned"""
-        if not self.enabled:
+        if not self.enabled or not self.notify_points:
             return
 
         gain = new_amount - old_amount
-        if gain <= 0:
+        if gain < self.min_points_gain:
             return
 
         prefix = f"[{html.escape(account_alias)}] " if account_alias else ""
@@ -159,7 +178,7 @@ class TelegramBot:
         self, account_alias, streamer, priority, action="started",
     ):
         """Notification: streamer went online / offline / started / displaced"""
-        if not self.enabled:
+        if not self.enabled or not self.notify_status:
             return
 
         icons = {
@@ -181,7 +200,7 @@ class TelegramBot:
 
     def send_error(self, account_alias, streamer, error):
         """Notification: error occurred"""
-        if not self.enabled:
+        if not self.enabled or not self.notify_errors:
             return
 
         safe = html.escape(str(error)[:300])
@@ -202,9 +221,10 @@ class TelegramBot:
     ):
         """
         Notification: Kick daily gamification challenge claimed.
-        Sends the reward card image (card_url) when a new card was won.
+        Sends the reward card image (card_url) only if `send_photo` is
+        enabled in the Telegram config; otherwise sends text only.
         """
-        if not self.enabled:
+        if not self.enabled or not self.notify_daily_reward:
             return
 
         prefix = f"[{html.escape(account_alias)}] " if account_alias else ""
@@ -221,13 +241,25 @@ class TelegramBot:
                 + "\n"
                 + t("tg_daily_reward_rarity", rarity=rarity or "unknown")
             )
-            if card_url:
+            if card_url and self.send_photo:
                 self._send_photo(card_url, caption)
             else:
                 self._send_message(caption)
 
     def send_restart(self, reason: str = "Manual"):
-        """Notification: restart"""
-        if not self.enabled:
+        """
+        Notification: restart / shutdown.
+
+        Sent synchronously (blocking) instead of via the usual
+        fire-and-forget background thread. This method is always called
+        right before the process exits (KeyboardInterrupt / SystemExit),
+        so a background thread would frequently get killed mid-request
+        before the HTTP call to Telegram completed, silently dropping
+        the notification. Discord's send_restart has the same requirement
+        and already sends synchronously for the same reason.
+        """
+        if not self.enabled or not self.notify_restart:
             return
-        self._send_message(t("tg_restart_notification", reason=reason))
+        self._send_message(
+            t("tg_restart_notification", reason=reason), blocking=True,
+        )
