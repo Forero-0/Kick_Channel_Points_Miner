@@ -473,8 +473,8 @@ class AccountWorker:
 
         Whether each channel actually sends anything (and whether it
         includes the reward card photo) is decided by that channel's own
-        notifier (Telegram.notify_daily_reward / send_photo,
-        Discord.notify_daily_reward / send_photo) — this only forwards
+        notifier (Telegram.notify_daily_reward / send_daily_reward_card,
+        Discord.notify_daily_reward / send_daily_reward_card) — this only forwards
         the event to both.
         """
         result = outcome.get("result") or {}
@@ -734,8 +734,8 @@ class AccountManager:
         # ClaimDailyReward is now a single on/off switch. Whether the
         # claimed-reward event gets posted to Discord/Telegram (and
         # whether it includes the card photo) is configured per-channel
-        # under Discord.notify_daily_reward / Discord.send_photo and
-        # Telegram.notify_daily_reward / Telegram.send_photo instead.
+        # under Discord.notify_daily_reward / Discord.send_daily_reward_card and
+        # Telegram.notify_daily_reward / Telegram.send_daily_reward_card instead.
         daily_challenge_enabled = config.get("ClaimDailyReward", False)
         if not isinstance(daily_challenge_enabled, bool):
             daily_challenge_enabled = False

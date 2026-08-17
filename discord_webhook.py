@@ -50,7 +50,9 @@ class DiscordWebhook:
 
         # Whether to attach the daily-reward card image. Off by default;
         # the user opts in per-channel (Discord/Telegram) independently.
-        self.send_photo = discord_cfg.get("send_photo", False)
+        self.send_daily_reward_card = discord_cfg.get(
+            "send_daily_reward_card", False
+        )
 
         # Colors (decimal)
         self.color_success = discord_cfg.get(
@@ -460,7 +462,7 @@ class DiscordWebhook:
                                 instead).
         already_owned=False -> a new card was won; rarity/card_url describe
                                 the reward and card_url is shown as an image
-                                only if `send_photo` is enabled.
+                                only if `send_daily_reward_card` is enabled.
         """
         if not self.enabled or not self.notify_daily_reward:
             return
@@ -490,7 +492,7 @@ class DiscordWebhook:
                 ],
                 thumbnail_url=None,
             )
-            if card_url and self.send_photo:
+            if card_url and self.send_daily_reward_card:
                 embed["image"] = {"url": card_url}
 
         payload = self._build_payload([embed])

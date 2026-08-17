@@ -60,7 +60,7 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
     "notify_restart": true,
     "notify_daily_reward": true,
     "min_points_gain": 10,
-    "send_photo": false
+    "send_daily_reward_card": false
   },
 
   "Discord": {
@@ -75,7 +75,7 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
     "notify_restart": true,
     "notify_daily_reward": true,
     "min_points_gain": 10,
-    "send_photo": false,
+    "send_daily_reward_card": false,
     "color_success": 3461464,
     "color_info": 5793266,
     "color_warning": 16763904,
@@ -136,7 +136,7 @@ The old single-account format is automatically converted:
     *   `chat_id`: Your personal Telegram chat/user ID.
     *   `notify_points` / `notify_status_change` / `notify_errors` / `notify_startup` / `notify_restart` / `notify_daily_reward`: Toggle which event types get sent to Telegram. All `true` (send everything) by default.
     *   `min_points_gain`: Minimum points gain to trigger a `notify_points` notification.
-    *   `send_photo`: Whether the daily-reward card image is sent as an actual photo. `false` by default (text only); set to `true` if you also want the image.
+    *   `send_daily_reward_card`: Whether the daily-reward card image is sent as an actual photo. `false` by default (text only); set to `true` if you also want the image.
 *   **`Proxy.enabled`**: Enable global proxy for all accounts.
     *   `Proxy.url`: Global proxy URL (`socks5://`, `http://`, `https://`).
 *   **`Check_interval`**: Seconds between online status checks (default: `120`).
@@ -213,7 +213,7 @@ The Telegram integration is **push-only**: it sends log-style notifications to `
     "notify_restart": true,
     "notify_daily_reward": true,
     "min_points_gain": 10,
-    "send_photo": false
+    "send_daily_reward_card": false
   }
 }
 ```
@@ -229,7 +229,7 @@ The Telegram integration is **push-only**: it sends log-style notifications to `
 | `notify_restart` | Send a notification when the miner stops/restarts |
 | `notify_daily_reward` | Send daily challenge reward notifications |
 | `min_points_gain` | Minimum points gain to trigger a points notification |
-| `send_photo` | Send the daily-reward card as an actual photo. `false` (text only) by default |
+| `send_daily_reward_card` | Send the daily-reward card as an actual photo. `false` (text only) by default |
 
 All `notify_*` flags default to `true` — by default every event type is sent. Set any of them to `false` to silence just that event type, the same way Discord's flags work.
 
@@ -238,7 +238,7 @@ You'll get a message for:
 *   💰 Points gained per streamer — if `notify_points`
 *   👁 Streamer status changes (started watching / displaced / online / offline) — if `notify_status_change`
 *   ❌ Errors — if `notify_errors`
-*   🎉 Daily challenge rewards claimed (if `ClaimDailyReward` is enabled and `notify_daily_reward` is true; includes the reward card image only if `send_photo` is true)
+*   🎉 Daily challenge rewards claimed (if `ClaimDailyReward` is enabled and `notify_daily_reward` is true; includes the reward card image only if `send_daily_reward_card` is true)
 *   🔄 Restarts/shutdowns — if `notify_restart` (sent synchronously right before the process exits, so it reliably arrives even when the bot is stopped with Ctrl+C)
 
 ---
@@ -267,7 +267,7 @@ Send real-time notifications to any Discord channel via webhooks – no bot requ
     "notify_restart": true,
     "notify_daily_reward": true,
     "min_points_gain": 10,
-    "send_photo": false,
+    "send_daily_reward_card": false,
     "color_success": 3461464,
     "color_info": 5793266,
     "color_warning": 16763904,
@@ -288,7 +288,7 @@ Send real-time notifications to any Discord channel via webhooks – no bot requ
 | `notify_restart` | Send a notification when the miner stops/restarts |
 | `notify_daily_reward` | Send daily challenge reward notifications |
 | `min_points_gain` | Minimum points gain to trigger notification |
-| `send_photo` | Send the daily-reward card as an actual image. `false` (text only) by default |
+| `send_daily_reward_card` | Send the daily-reward card as an actual image. `false` (text only) by default |
 | `color_*` | 	Embed colors in decimal (use [color converter](https://www.mathsisfun.com/hexadecimal-decimal-colors.html)) |
 
 Notifications include:
@@ -298,14 +298,14 @@ Notifications include:
 * ▶️ Started watching / ⏹ Displaced by priority — if `notify_status_change`
 * 🟢 Streamer online / 🔴 Streamer offline — if `notify_status_change`
 * ❌ Error reports — if `notify_errors`
-* 🎉 Daily challenge reward claimed — if `notify_daily_reward` (image attached only if `send_photo` is true)
+* 🎉 Daily challenge reward claimed — if `notify_daily_reward` (image attached only if `send_daily_reward_card` is true)
 * 🔄 Restart/shutdown notifications — if `notify_restart`
 
 ---
 
 ### 🎯 Daily Reward Claim
 
-Automatically checks and claims Kick's gamification daily challenge (watch-time reward + roulette prize), per account, and posts the result to Discord and/or Telegram (subject to each channel's own `notify_daily_reward` / `send_photo` settings above).
+Automatically checks and claims Kick's gamification daily challenge (watch-time reward + roulette prize), per account, and posts the result to Discord and/or Telegram (subject to each channel's own `notify_daily_reward` / `send_daily_reward_card` settings above).
 
 **How it works — no fixed polling interval:**
 1. When it starts (or right after claiming, or when a new day's challenge window begins), it asks Kick's API once how many watch-time minutes are still needed.
@@ -320,13 +320,11 @@ Automatically checks and claims Kick's gamification daily challenge (watch-time 
 }
 ```
 
-`ClaimDailyReward` is a single on/off switch — `true` enables the feature, `false` (default) disables it. Nothing else lives under this key anymore. Whether the claimed-reward event is posted to Discord/Telegram, and whether it includes the card photo, is controlled by that channel's own `notify_daily_reward` / `send_photo` settings (see the Telegram and Discord sections above) — enabled by default for notifications, disabled by default for the photo.
-
-> The old object form `{"enabled": false}` is still accepted for backwards compatibility, but the plain boolean shown above is now the recommended format.
+`ClaimDailyReward` is a single on/off switch — `true` enables the feature, `false` (default) disables it. Nothing else lives under this key anymore. Whether the claimed-reward event is posted to Discord/Telegram, and whether it includes the card photo, is controlled by that channel's own `notify_daily_reward` / `send_daily_reward_card` settings (see the Telegram and Discord sections above) — enabled by default for notifications, disabled by default for the photo.
 
 When a reward is claimed, the notification shows:
 * 🎉 Confirmation that the challenge was claimed
-* 🏆 The reward's rarity, with its card image attached only if that channel's `send_photo` is `true`
+* 🏆 The reward's rarity, with its card image attached only if that channel's `send_daily_reward_card` is `true`
 * 🎁 Or, if you already owned that card, how many extra watch-time minutes you got towards your next level instead
 
 ---

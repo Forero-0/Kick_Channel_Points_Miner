@@ -50,7 +50,9 @@ class TelegramBot:
         # Whether to send the daily-reward card as an actual photo.
         # Off by default so Telegram only sends text unless the user
         # opts in.
-        self.send_photo = tg_cfg.get("send_photo", False)
+        self.send_daily_reward_card = tg_cfg.get(
+            "send_daily_reward_card", False
+        )
 
         # Rate limiting
         self._last_send_time = 0.0
@@ -221,8 +223,9 @@ class TelegramBot:
     ):
         """
         Notification: Kick daily gamification challenge claimed.
-        Sends the reward card image (card_url) only if `send_photo` is
-        enabled in the Telegram config; otherwise sends text only.
+        Sends the reward card image (card_url) only if
+        `send_daily_reward_card` is enabled in the Telegram config;
+        otherwise sends text only.
         """
         if not self.enabled or not self.notify_daily_reward:
             return
@@ -241,7 +244,7 @@ class TelegramBot:
                 + "\n"
                 + t("tg_daily_reward_rarity", rarity=rarity or "unknown")
             )
-            if card_url and self.send_photo:
+            if card_url and self.send_daily_reward_card:
                 self._send_photo(card_url, caption)
             else:
                 self._send_message(caption)

@@ -13,7 +13,7 @@
     "notify_restart": true,
     "notify_daily_reward": true,
     "min_points_gain": 10,
-    "send_photo": false
+    "send_daily_reward_card": false
   },
 
   "Discord": {
@@ -28,7 +28,7 @@
     "notify_restart": true,
     "notify_daily_reward": true,
     "min_points_gain": 10,
-    "send_photo": false,
+    "send_daily_reward_card": false,
     "color_success": 3461464,
     "color_info": 5793266,
     "color_warning": 16763904,
