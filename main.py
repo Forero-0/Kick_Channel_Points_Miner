@@ -10,6 +10,7 @@ from localization import load_language, t, DEFAULT_LANGUAGE
 
 from account_manager import AccountManager
 from discord_webhook import DiscordWebhook
+from telegram import TelegramBot
 
 
 def _read_configured_language(default=DEFAULT_LANGUAGE):
@@ -74,19 +75,17 @@ async def main():
         logger.info(t("discord_webhook_enabled"))
 
     # 4. Telegram
-    if config.get("Telegram", {}).get("enabled", False):
-        try:
-            from tg_bot.bot import TelegramBot
-            telegram_bot = TelegramBot(config)
-            telegram_bot.set_account_manager(account_manager)
-            account_manager.set_tg_bot(telegram_bot)
-            await telegram_bot.start()
-        except Exception as e:
-            logger.error(t("telegram_failed_to_start", error=e))
+    telegram_bot = TelegramBot(config)
+    if telegram_bot.enabled:
+        account_manager.set_tg_bot(telegram_bot)
 
     # 5. Send startup notifications
     if discord_hook.enabled:
         discord_hook.send_startup(
+            account_manager.get_all_status()
+        )
+    if telegram_bot.enabled:
+        telegram_bot.send_startup(
             account_manager.get_all_status()
         )
 
@@ -107,16 +106,22 @@ if __name__ == "__main__":
             logger.info(t("stopped_by_user"))
             if discord_hook and discord_hook.enabled:
                 discord_hook.send_restart("User stopped (Ctrl+C)")
+            if telegram_bot and telegram_bot.enabled:
+                telegram_bot.send_restart("User stopped (Ctrl+C)")
             sys.exit(0)
         except SystemExit:
             logger.info(t("restarting_system_exit"))
             if discord_hook and discord_hook.enabled:
                 discord_hook.send_restart("SystemExit")
+            if telegram_bot and telegram_bot.enabled:
+                telegram_bot.send_restart("SystemExit")
         except Exception as e:
             logger.critical(t("critical_error_main", error=e))
             traceback.print_exc()
             if discord_hook and discord_hook.enabled:
                 discord_hook.send_error("System", "main.py", str(e))
+            if telegram_bot and telegram_bot.enabled:
+                telegram_bot.send_error("System", "main.py", str(e))
 
         logger.info(t("restarting_in_seconds"))
         time.sleep(5)

@@ -14,7 +14,7 @@ from utils.daily_challenge import DailyChallenge
 
 if TYPE_CHECKING:
     from discord_webhook import DiscordWebhook
-    from tg_bot.bot import TelegramBot
+    from telegram import TelegramBot
 
 
 @dataclass
@@ -200,6 +200,11 @@ class AccountWorker:
                             self.alias, name,
                             st.priority, "online"
                         )
+                    if self._tg_bot:
+                        self._tg_bot.send_streamer_online(
+                            self.alias, name,
+                            st.priority, "online"
+                        )
 
                 elif was_online and not st.is_online:
                     logger.info(t(
@@ -208,6 +213,11 @@ class AccountWorker:
                     ))
                     if self._discord:
                         self._discord.send_streamer_online(
+                            self.alias, name,
+                            st.priority, "offline"
+                        )
+                    if self._tg_bot:
+                        self._tg_bot.send_streamer_online(
                             self.alias, name,
                             st.priority, "offline"
                         )
@@ -260,6 +270,12 @@ class AccountWorker:
                         self.state.streamers[name].priority,
                         "displaced"
                     )
+                if self._tg_bot and reason_key == "reason_displaced":
+                    self._tg_bot.send_streamer_online(
+                        self.alias, name,
+                        self.state.streamers[name].priority,
+                        "displaced"
+                    )
 
             to_start = desired - current
             for name in to_start:
@@ -272,6 +288,10 @@ class AccountWorker:
 
                 if self._discord:
                     self._discord.send_streamer_online(
+                        self.alias, name, pri, "started"
+                    )
+                if self._tg_bot:
+                    self._tg_bot.send_streamer_online(
                         self.alias, name, pri, "started"
                     )
 
@@ -366,6 +386,10 @@ class AccountWorker:
                 self._discord.send_error(
                     self.alias, name, str(e)
                 )
+            if self._tg_bot:
+                self._tg_bot.send_error(
+                    self.alias, name, str(e)
+                )
 
     async def _stop_streamer(self, name: str):
         st = self.state.streamers[name]
@@ -432,6 +456,10 @@ class AccountWorker:
                         self._discord.send_points_update(
                             self.alias, name, old, amount
                         )
+                    if self._tg_bot:
+                        self._tg_bot.send_points_update(
+                            self.alias, name, old, amount
+                        )
 
             except asyncio.CancelledError:
                 break
@@ -481,14 +509,12 @@ class AccountWorker:
             )
 
         if self._tg_bot and self.daily_challenge_notify_telegram:
-            asyncio.create_task(
-                self._tg_bot.send_daily_reward_claimed(
-                    self.alias,
-                    rarity=rarity,
-                    card_url=card_url,
-                    watch_time_minutes=watch_time_minutes,
-                    already_owned=already_owned,
-                )
+            self._tg_bot.send_daily_reward_claimed(
+                self.alias,
+                rarity=rarity,
+                card_url=card_url,
+                watch_time_minutes=watch_time_minutes,
+                already_owned=already_owned,
             )
 
     async def _daily_challenge_loop(self):

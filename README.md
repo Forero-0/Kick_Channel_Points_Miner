@@ -5,7 +5,7 @@
 
 > [🇷🇺 **Читать на русском языке**](README_RU.md) • [🇪🇸 **Leer en español**](README_es.md)
 
-A powerful, asynchronous bot for automatically farming channel points on **Kick.com**. Features advanced Telegram control and Cloudflare protection bypass.
+A powerful, asynchronous bot for automatically farming channel points on **Kick.com**. Features Telegram & Discord log notifications and Cloudflare protection bypass.
 
 ---
 
@@ -16,11 +16,7 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
 *   **🔒 Concurrent Limits:** Set `max_concurrent` per account to control how many streamers are watched at once – prevents 403 rate-limiting.
 *   **🌐 SOCKS5/HTTP Proxy:** Global or per-account proxy support to avoid IP blocks.
 *   **🛡️ Cloudflare Bypass:** Built-in `curl_cffi` based session management with automatic retry on 403.
-*   **📱 Telegram Bot:**
-    *   **Owner/Guest System:** Owner has full control, guests can only view status.
-    *   **Multi-Account Views:** `/status`, `/balance`, `/accounts` commands show data per account.
-    *   **Live Notifications:** Updates on points farmed and errors.
-    *   **Remote Control:** Restart the miner via Telegram.
+*   **📱 Telegram Notifications:** Push-only log notifications (startup, points gained, streamer status, errors, restarts) sent straight to your chat – just like the Discord webhook, it never listens for commands.
 *   **🌐 Multi-language:** Support for English, Russian and Spanish.
 *   **📉 Smart Logging:** Clean console output with optional Debug mode.
 *   **♻️ Memory-Safe:** Sessions are reused and properly closed – no memory leaks during long runs.
@@ -56,8 +52,7 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
   "Telegram": {
     "enabled": false,
     "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
-    "chat_id": "YOUR_TELEGRAM_USER_ID",
-    "allowed_users": [123456789]
+    "chat_id": "YOUR_TELEGRAM_USER_ID"
   },
 
   "Discord": {
@@ -112,7 +107,7 @@ The old single-account format is automatically converted:
 {
   "Language": "en",
   "Debug": false,
-  "Telegram": { "enabled": false, "bot_token": "", "chat_id": "", "allowed_users": [] },
+  "Telegram": { "enabled": false, "bot_token": "", "chat_id": "" },
   "Private": { "token": "YOUR_KICK_TOKEN" },
   "Streamers": ["stream1", "stream2", "stream3"],
   "Max_active_channels": 5
@@ -127,8 +122,7 @@ The old single-account format is automatically converted:
 *   **`Debug`**: Set `"true"` for detailed logs, `"false"` for clean output.
 *   **`Telegram`**:
     *   `bot_token`: Get this from @BotFather.
-    *   `chat_id`: Your personal Telegram ID (you will be the **Owner**).
-    *   `allowed_users`: List of user IDs who can view status/balance (Guests).
+    *   `chat_id`: Your personal Telegram chat/user ID. The bot sends all notifications here.
 *   **`Proxy.enabled`**: Enable global proxy for all accounts.
     *   `Proxy.url`: Global proxy URL (`socks5://`, `http://`, `https://`).
 *   **`Check_interval`**: Seconds between online status checks (default: `120`).
@@ -187,17 +181,17 @@ The bot will:
 4. Dynamically rebalance when streamers go online/offline
 5. Automatically restart on crashes
 
-### 📱 Telegram Commands
+### 📱 Telegram Notifications
 
-| Command | Description | Permission |
-| :--- | :--- | :--- |
-| `/start` | Initialize the bot and keyboard | Everyone |
-| `/status` | View active streamers and uptime | Everyone |
-| `/balance` | Check farmed points for all channels | Everyone |
-| `/accounts` | Overview of all accounts | Everyone |
-| `/help` | Show available commands | Everyone |
-| `/restart` | **Restart the miner process** | **Owner Only** |
-| `/language` | Change bot language (`en`/`ru`) | **Owner Only** |
+The Telegram integration is **push-only**: it sends log-style notifications to `chat_id`, the same way the Discord webhook posts to a channel. It never listens for updates and has no commands to type – there's nothing to configure beyond `bot_token` and `chat_id`.
+
+You'll get a message for:
+*   🚀 Miner startup (accounts & streamers loaded)
+*   💰 Points gained per streamer
+*   👁 Streamer status changes (started watching / displaced / online / offline)
+*   ❌ Errors
+*   🎉 Daily challenge rewards claimed (if enabled, with the reward card image)
+*   🔄 Restarts
 
 ---
 
@@ -315,11 +309,8 @@ Kick_Channel_Points_Miner/
 ├── utils/
 │   ├── kick_utility.py        # Channel/stream ID fetching
 │   └── get_points_amount.py   # Points balance checking
-├── tg_bot/
-│   ├── bot.py                 # Telegram bot with multi-account support
-│   └── lang/
-│       ├── en.lang            # English strings
-│       └── ru.lang            # Russian strings
+├── discord_webhook.py         # Discord notifier
+├── telegram.py                # Telegram notifier
 └── lang/
     ├── en.lang                # English log messages
     └── ru.lang                # Russian log messages

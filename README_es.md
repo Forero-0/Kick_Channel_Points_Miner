@@ -5,7 +5,7 @@
 
 > [🇬🇧 **Read in English**](README.md) • [🇷🇺 **Читать на русском языке**](README_RU.md)
 
-Un potente bot asíncrono para farmear automáticamente puntos de canal en **Kick.com**. Incluye control avanzado por Telegram y mecanismos para sortear Cloudflare.
+Un potente bot asíncrono para farmear automáticamente puntos de canal en **Kick.com**. Incluye notificaciones de registro por Telegram y Discord, y mecanismos para sortear Cloudflare.
 
 ---
 
@@ -16,11 +16,7 @@ Un potente bot asíncrono para farmear automáticamente puntos de canal en **Kic
 *   **🔒 Límites Concurrentes:** Ajusta `max_concurrent` por cuenta para controlar cuántos streamers se ven a la vez y evitar errores 403.
 *   **🌐 Proxy SOCKS5/HTTP:** Soporte global o por cuenta para evitar bloqueos por IP.
 *   **🛡️ Bypass de Cloudflare:** Gestión de sesiones basada en `curl_cffi` con reintentos automáticos ante 403.
-*   **📱 Bot de Telegram:**
-    *   **Sistema Owner/Guest:** El propietario tiene control total; los invitados solo pueden ver estado.
-    *   **Vistas Multi-Cuenta:** `/status`, `/balance`, `/accounts` muestran información por cuenta.
-    *   **Notificaciones en vivo:** Avisos sobre puntos farmed y errores.
-    *   **Control remoto:** Reinicia el miner desde Telegram.
+*   **📱 Notificaciones por Telegram:** Solo envío de notificaciones tipo log (inicio, puntos ganados, estado de streamers, errores, reinicios) directo a tu chat — igual que el webhook de Discord, nunca escucha comandos.
 *   **🌐 Multilenguaje:** Soporta Inglés y Ruso (y esta traducción al Español).
 *   **📉 Registro Inteligente:** Salida de consola limpia con modo Debug opcional.
 *   **♻️ Seguro en memoria:** Reutiliza y cierra sesiones correctamente — sin fugas durante ejecuciones largas.
@@ -56,8 +52,7 @@ Un potente bot asíncrono para farmear automáticamente puntos de canal en **Kic
   "Telegram": {
     "enabled": false,
     "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
-    "chat_id": "YOUR_TELEGRAM_USER_ID",
-    "allowed_users": [123456789]
+    "chat_id": "YOUR_TELEGRAM_USER_ID"
   },
 
   "Discord": {
@@ -112,7 +107,7 @@ El antiguo formato de una sola cuenta se convierte automáticamente:
 {
   "Language": "en",
   "Debug": false,
-  "Telegram": { "enabled": false, "bot_token": "", "chat_id": "", "allowed_users": [] },
+  "Telegram": { "enabled": false, "bot_token": "", "chat_id": "" },
   "Private": { "token": "YOUR_KICK_TOKEN" },
   "Streamers": ["stream1", "stream2", "stream3"],
   "Max_active_channels": 5
@@ -127,8 +122,7 @@ El antiguo formato de una sola cuenta se convierte automáticamente:
 *   **`Debug`**: `true` para logs detallados, `false` para salida limpia.
 *   **`Telegram`**:
     *   `bot_token`: Consíguelo de @BotFather.
-    *   `chat_id`: Tu ID personal de Telegram (serás el **Owner**).
-    *   `allowed_users`: Lista de IDs que pueden ver estado/balance (Guests).
+    *   `chat_id`: Tu ID de chat/usuario personal de Telegram. El bot envía todas las notificaciones aquí.
 *   **`Proxy.enabled`**: Activa proxy global para todas las cuentas.
     *   `Proxy.url`: URL del proxy (`socks5://`, `http://`, `https://`).
 *   **`Check_interval`**: Segundos entre comprobaciones de estado (por defecto: `120`).
@@ -187,17 +181,17 @@ El bot:
 4. Rebalanceará dinámicamente cuando cambien estados
 5. Se reiniciará automáticamente en fallos
 
-### 📱 Comandos de Telegram
+### 📱 Notificaciones de Telegram
 
-| Comando | Descripción | Permiso |
-| :--- | :--- | :--- |
-| `/start` | Inicializa el bot y el teclado | Todos |
-| `/status` | Ver streamers activos y uptime | Todos |
-| `/balance` | Comprobar puntos farmed por canales | Todos |
-| `/accounts` | Resumen de todas las cuentas | Todos |
-| `/help` | Mostrar comandos disponibles | Todos |
-| `/restart` | **Reiniciar el proceso del miner** | **Solo Owner** |
-| `/language` | Cambiar idioma del bot (`en`/`ru`) | **Solo Owner** |
+La integración con Telegram es **solo de envío**: manda notificaciones tipo log a `chat_id`, igual que el webhook de Discord publica en un canal. Nunca escucha actualizaciones y no tiene comandos que escribir — no hay nada que configurar además de `bot_token` y `chat_id`.
+
+Recibirás un mensaje por:
+*   🚀 Inicio del miner (cuentas y streamers cargados)
+*   💰 Puntos ganados por streamer
+*   👁 Cambios de estado de streamers (empieza a ver / desplazado / online / offline)
+*   ❌ Errores
+*   🎉 Recompensas del reto diario reclamadas (si está habilitado, con la imagen de la carta)
+*   🔄 Reinicios
 
 ---
 
@@ -316,11 +310,8 @@ Kick_Channel_Points_Miner/
 ├── utils/
 │   ├── kick_utility.py        # Obtención de Channel/Stream ID
 │   └── get_points_amount.py   # Comprobación de balance de puntos
-├── tg_bot/
-│   ├── bot.py                 # Bot de Telegram con soporte multi-cuenta
-│   └── lang/
-│       ├── en.lang            # Strings en inglés
-│       └── ru.lang            # Strings en ruso
+├── discord_webhook.py         # Notificador de Discord
+├── telegram.py                # Notificador de Telegram
 └── lang/
     ├── en.lang                # Mensajes en inglés
     └── ru.lang                # Mensajes en ruso

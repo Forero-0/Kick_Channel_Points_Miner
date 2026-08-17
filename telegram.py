@@ -1,0 +1,233 @@
+import html
+import threading
+import time
+from typing import List, Optional
+from loguru import logger
+
+try:
+    from curl_cffi import requests as cffi_requests
+    USE_CFFI = True
+except ImportError:
+    import requests as std_requests
+    USE_CFFI = False
+
+from localization import t
+
+
+class TelegramBot:
+    """
+    Push-only Telegram notifier.
+
+    Sends log-style notifications (startup, points gained, streamer
+    status changes, errors, daily reward claims, restarts) to a single
+    `chat_id`, the exact same way `DiscordWebhook` posts embeds to a
+    Discord channel: a plain outbound HTTP call to the Telegram Bot API,
+    fired from a background thread.
+
+    It never listens for updates, never registers commands, and never
+    polls Telegram for incoming messages.
+    """
+
+    API_URL = "https://api.telegram.org/bot{token}/{method}"
+
+    def __init__(self, config: dict):
+        tg_cfg = config.get("Telegram", {})
+
+        self.enabled = tg_cfg.get("enabled", False)
+        self.token = tg_cfg.get("bot_token", "")
+        self.chat_id = tg_cfg.get("chat_id")
+
+        # Rate limiting
+        self._last_send_time = 0.0
+        self._min_interval = 1.0
+        self._lock = threading.Lock()
+
+        if self.enabled and not self.token:
+            logger.error(t("tg_token_not_found"))
+            self.enabled = False
+
+        if self.enabled and not self.chat_id:
+            logger.error(t("tg_no_chat_id"))
+            self.enabled = False
+
+        if self.enabled:
+            logger.success(t("tg_bot_initialized"))
+
+    def _url(self, method: str) -> str:
+        return self.API_URL.format(token=self.token, method=method)
+
+    def _post(self, method: str, payload: dict) -> bool:
+        if not self.enabled:
+            return False
+
+        with self._lock:
+            now = time.time()
+            elapsed = now - self._last_send_time
+            if elapsed < self._min_interval:
+                time.sleep(self._min_interval - elapsed)
+
+            try:
+                url = self._url(method)
+                if USE_CFFI:
+                    resp = cffi_requests.post(url, json=payload, timeout=10)
+                else:
+                    resp = std_requests.post(url, json=payload, timeout=10)
+
+                self._last_send_time = time.time()
+
+                if resp.status_code == 200:
+                    return True
+
+                logger.error(t(
+                    "tg_send_failed",
+                    user_id=self.chat_id, error=f"HTTP {resp.status_code}",
+                ))
+                return False
+
+            except Exception as e:
+                logger.error(t(
+                    "tg_send_failed", user_id=self.chat_id, error=str(e),
+                ))
+                return False
+
+    def _send_in_thread(self, method: str, payload: dict):
+        thread = threading.Thread(
+            target=self._post, args=(method, payload), daemon=True,
+        )
+        thread.start()
+
+    def _send_message(self, text: str):
+        self._send_in_thread("sendMessage", {
+            "chat_id": self.chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+        })
+
+    def _send_photo(self, photo_url: str, caption: str = ""):
+        self._send_in_thread("sendPhoto", {
+            "chat_id": self.chat_id,
+            "photo": photo_url,
+            "caption": caption,
+            "parse_mode": "HTML",
+        })
+
+    # --- Notifications -----------------------------------------------
+
+    def send_startup(self, accounts: List[dict]):
+        """Notification: miner started"""
+        if not self.enabled:
+            return
+
+        lines = [t("tg_startup_title"), ""]
+        for acc in accounts:
+            alias = html.escape(acc.get("alias", "Unknown"))
+            streamers = acc.get("streamer_order", [])
+            limit = acc.get("max_concurrent", 0)
+            proxy = "🔒" if acc.get("proxy") else "🌐"
+
+            streamer_list = ", ".join(streamers[:5])
+            if len(streamers) > 5:
+                streamer_list += f" +{len(streamers) - 5}"
+
+            lines.append(
+                f"{proxy} <b>{alias}</b> [{limit}]: "
+                f"<code>{html.escape(streamer_list)}</code>"
+            )
+
+        self._send_message("\n".join(lines))
+
+    def send_points_update(
+        self, account_alias, streamer, old_amount, new_amount,
+    ):
+        """Notification: points earned"""
+        if not self.enabled:
+            return
+
+        gain = new_amount - old_amount
+        if gain <= 0:
+            return
+
+        prefix = f"[{html.escape(account_alias)}] " if account_alias else ""
+        text = prefix + t(
+            "tg_points_gained",
+            streamer=f"<b>{html.escape(streamer)}</b>",
+            gain=gain, total=new_amount,
+        )
+        self._send_message(text)
+
+    def send_streamer_online(
+        self, account_alias, streamer, priority, action="started",
+    ):
+        """Notification: streamer went online / offline / started / displaced"""
+        if not self.enabled:
+            return
+
+        icons = {
+            "started": "👁", "displaced": "⏸",
+            "online": "🟢", "offline": "⚫",
+        }
+        icon = icons.get(action, "📡")
+        action_label = t(f"tg_action_{action}") if action in icons else action
+
+        prefix = f"[{html.escape(account_alias)}] " if account_alias else ""
+        text = prefix + t(
+            "tg_streamer_status",
+            icon=icon,
+            streamer=f"<b>{html.escape(streamer)}</b>",
+            action=action_label,
+            priority=priority,
+        )
+        self._send_message(text)
+
+    def send_error(self, account_alias, streamer, error):
+        """Notification: error occurred"""
+        if not self.enabled:
+            return
+
+        safe = html.escape(str(error)[:300])
+        prefix = f"[{html.escape(account_alias)}] " if account_alias else ""
+        text = prefix + t(
+            "tg_error_occurred",
+            streamer=html.escape(streamer), error=safe,
+        )
+        self._send_message(text)
+
+    def send_daily_reward_claimed(
+        self,
+        account_alias: str,
+        rarity: Optional[str] = None,
+        card_url: Optional[str] = None,
+        watch_time_minutes: Optional[int] = None,
+        already_owned: bool = False,
+    ):
+        """
+        Notification: Kick daily gamification challenge claimed.
+        Sends the reward card image (card_url) when a new card was won.
+        """
+        if not self.enabled:
+            return
+
+        prefix = f"[{html.escape(account_alias)}] " if account_alias else ""
+
+        if already_owned:
+            text = prefix + t(
+                "tg_daily_reward_consolation", minutes=watch_time_minutes,
+            )
+            self._send_message(text)
+        else:
+            caption = (
+                prefix
+                + t("tg_daily_reward_claimed")
+                + "\n"
+                + t("tg_daily_reward_rarity", rarity=rarity or "unknown")
+            )
+            if card_url:
+                self._send_photo(card_url, caption)
+            else:
+                self._send_message(caption)
+
+    def send_restart(self, reason: str = "Manual"):
+        """Notification: restart"""
+        if not self.enabled:
+            return
+        self._send_message(t("tg_restart_notification", reason=reason))
