@@ -599,6 +599,26 @@ class AccountWorker:
 
                 is_watching = self.state.active_count > 0
 
+                # Accumulate BEFORE evaluating the threshold. Previously the
+                # threshold was checked first and the increment happened in
+                # the "else" branch, so the tick that actually reached the
+                # goal was never counted until the *next* loop iteration -
+                # and if watching stopped in between (stream ended, account
+                # switched channel, etc.) that final tick was lost forever,
+                # so the estimate was never reached and claim() was never
+                # called.
+                if is_watching:
+                    accumulated_seconds += self._DAILY_CHALLENGE_TICK_SECONDS
+                    logger.debug(t(
+                        "daily_challenge_progress",
+                        alias=self.alias,
+                        accumulated=int(accumulated_seconds),
+                        remaining=(
+                            int(remaining_seconds)
+                            if remaining_seconds is not None else -1
+                        ),
+                    ))
+
                 need_first_check = remaining_seconds is None
                 reached_estimate = (
                     remaining_seconds is not None
@@ -621,8 +641,38 @@ class AccountWorker:
                         remaining_minutes = outcome.get(
                             "remaining_minutes", 0
                         ) or 0
-                        remaining_seconds = remaining_minutes * 60
-                        accumulated_seconds = 0.0
+                        new_remaining_seconds = remaining_minutes * 60
+
+                        # Kick reports remaining time in whole minutes, so it
+                        # can still say e.g. "1 minute left" right after we
+                        # already accumulated 59s. Blindly resetting
+                        # accumulated_seconds to 0 here (old behaviour)
+                        # threw away that progress and made us wait a full
+                        # extra minute every single time we polled - in
+                        # practice this could stall the claim indefinitely
+                        # on accounts with short/interrupted watch sessions.
+                        # Instead, only reset the counter if the API's
+                        # figure implies MORE time is needed than we thought
+                        # (e.g. after actually claiming yesterday and a new,
+                        # bigger challenge started). Otherwise keep counting
+                        # forward from where we are.
+                        if (
+                            remaining_seconds is None
+                            or new_remaining_seconds > remaining_seconds
+                        ):
+                            remaining_seconds = new_remaining_seconds
+                        else:
+                            remaining_seconds = min(
+                                remaining_seconds, new_remaining_seconds
+                            )
+
+                        logger.debug(t(
+                            "daily_challenge_still_in_progress",
+                            alias=self.alias,
+                            remaining_minutes=remaining_minutes,
+                            accumulated=int(accumulated_seconds),
+                        ))
+
                         if remaining_seconds <= 0:
                             # Kick still reports "in progress" even though
                             # our math says the goal is met - avoid
@@ -633,12 +683,14 @@ class AccountWorker:
                     else:
                         # No challenge data at all (API/auth issue) -
                         # back off a bit before trying again so we don't
-                        # spam a failing endpoint.
-                        remaining_seconds = None
+                        # spam a failing endpoint. Keep remaining_seconds/
+                        # accumulated_seconds untouched so we don't lose
+                        # progress just because of a transient API hiccup.
+                        logger.warning(t(
+                            "daily_challenge_check_failed_retry",
+                            alias=self.alias,
+                        ))
                         await asyncio.sleep(300)
-
-                elif is_watching:
-                    accumulated_seconds += self._DAILY_CHALLENGE_TICK_SECONDS
 
             except asyncio.CancelledError:
                 break

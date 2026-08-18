@@ -250,6 +250,9 @@
   "daily_challenge_claimed": "🎉 [{alias}] ¡Reto diario reclamado! Rareza de la recompensa: {rarity}",
   "daily_challenge_loop_error": "❌ [{alias}] Error en el ciclo del reto diario: {error}",
   "daily_challenge_consolation": "🎁 [{alias}] Ya tenías esta recompensa, obtuviste +{minutes} min de visualización para subir de nivel",
+  "daily_challenge_progress": "⏱️ [{alias}] Progreso local reto diario: {accumulated}s acumulados / {remaining}s estimados",
+  "daily_challenge_still_in_progress": "🎯 [{alias}] Aún en progreso tras verificar con la API: faltan {remaining_minutes} min (acumulado local: {accumulated}s)",
+  "daily_challenge_check_failed_retry": "⚠️ [{alias}] Falló la verificación del reto diario, reintentando en 5 min",
 
   "tg_bot_connected_accounts": "📱 Notificador de Telegram conectado a {count} cuenta(s)",
   "tg_send_photo_failed": "❌ Telegram: falló al enviar la foto a {user_id}: {error}",

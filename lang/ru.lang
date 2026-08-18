@@ -250,6 +250,9 @@
   "daily_challenge_claimed": "🎉 [{alias}] Ежедневное задание получено! Редкость награды: {rarity}",
   "daily_challenge_loop_error": "❌ [{alias}] Ошибка в цикле ежедневного задания: {error}",
   "daily_challenge_consolation": "🎁 [{alias}] У вас уже была эта награда, вы получили +{minutes} мин. времени просмотра для повышения уровня",
+  "daily_challenge_progress": "⏱️ [{alias}] Локальный прогресс ежедневного задания: {accumulated}с накоплено / {remaining}с ожидается",
+  "daily_challenge_still_in_progress": "🎯 [{alias}] Всё ещё в процессе после проверки API: осталось {remaining_minutes} мин (накоплено локально: {accumulated}с)",
+  "daily_challenge_check_failed_retry": "⚠️ [{alias}] Проверка ежедневного задания не удалась, повтор через 5 мин",
 
   "tg_bot_connected_accounts": "📱 Telegram-нотификатор подключён к {count} аккаунт(ам)",
   "tg_send_photo_failed": "❌ Telegram: не удалось отправить фото пользователю {user_id}: {error}",
