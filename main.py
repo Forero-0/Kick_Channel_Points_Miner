@@ -105,16 +105,16 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             logger.info(t("stopped_by_user"))
             if discord_hook and discord_hook.enabled:
-                discord_hook.send_restart("User stopped (Ctrl+C)")
+                discord_hook.send_restart(t("restart_reason_user_stopped"))
             if telegram_bot and telegram_bot.enabled:
-                telegram_bot.send_restart("User stopped (Ctrl+C)")
+                telegram_bot.send_restart(t("restart_reason_user_stopped"))
             sys.exit(0)
         except SystemExit:
             logger.info(t("restarting_system_exit"))
             if discord_hook and discord_hook.enabled:
-                discord_hook.send_restart("SystemExit")
+                discord_hook.send_restart(t("restart_reason_system_exit"))
             if telegram_bot and telegram_bot.enabled:
-                telegram_bot.send_restart("SystemExit")
+                telegram_bot.send_restart(t("restart_reason_system_exit"))
         except Exception as e:
             logger.critical(t("critical_error_main", error=e))
             traceback.print_exc()

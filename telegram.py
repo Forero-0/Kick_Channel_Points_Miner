@@ -11,7 +11,7 @@ except ImportError:
     import requests as std_requests
     USE_CFFI = False
 
-from localization import t
+from localization import t, t_rarity
 
 
 class TelegramBot:
@@ -141,7 +141,7 @@ class TelegramBot:
 
         lines = [t("tg_startup_title"), ""]
         for acc in accounts:
-            alias = html.escape(acc.get("alias", "Unknown"))
+            alias = html.escape(acc.get("alias") or t("unknown_alias"))
             streamers = acc.get("streamer_order", [])
             limit = acc.get("max_concurrent", 0)
             proxy = "🔒" if acc.get("proxy") else "🌐"
@@ -242,14 +242,14 @@ class TelegramBot:
                 prefix
                 + t("tg_daily_reward_claimed")
                 + "\n"
-                + t("tg_daily_reward_rarity", rarity=rarity or "unknown")
+                + t("tg_daily_reward_rarity", rarity=t_rarity(rarity))
             )
             if card_url and self.send_daily_reward_card:
                 self._send_photo(card_url, caption)
             else:
                 self._send_message(caption)
 
-    def send_restart(self, reason: str = "Manual"):
+    def send_restart(self, reason: str = None):
         """
         Notification: restart / shutdown.
 
@@ -264,5 +264,5 @@ class TelegramBot:
         if not self.enabled or not self.notify_restart:
             return
         self._send_message(
-            t("tg_restart_notification", reason=reason), blocking=True,
+            t("tg_restart_notification", reason=reason or t("restart_reason_manual")), blocking=True,
         )

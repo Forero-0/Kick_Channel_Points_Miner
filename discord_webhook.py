@@ -12,7 +12,7 @@ except ImportError:
     import requests as std_requests
     USE_CFFI = False
 
-from localization import t
+from localization import t, t_rarity
 
 
 class DiscordWebhook:
@@ -221,7 +221,7 @@ class DiscordWebhook:
 
         fields = []
         for acc in accounts:
-            alias = acc.get("alias", "Unknown")
+            alias = acc.get("alias") or t("unknown_alias")
             streamers = acc.get("streamer_order", [])
             limit = acc.get("max_concurrent", 0)
             proxy = t("discord_proxy") if acc.get("proxy") else t("discord_direct")
@@ -369,7 +369,7 @@ class DiscordWebhook:
         grand_total = 0
 
         for acc in accounts_status:
-            alias = acc.get("alias", "Unknown")
+            alias = acc.get("alias") or t("unknown_alias")
             active = acc.get("active_count", 0)
             limit = acc.get("max_concurrent", 0)
             proxy = "🔒" if acc.get("proxy") else "🌐"  # icon-only, kept language-neutral
@@ -431,14 +431,14 @@ class DiscordWebhook:
         payload = self._build_payload(embeds)
         self._send_in_thread(payload)
 
-    def send_restart(self, reason: str = "Manual"):
+    def send_restart(self, reason: str = None):
         """Notification: restart"""
         if not self.enabled or not self.notify_restart:
             return
 
         embed = self._embed(
             title=t("discord_restart_title"),
-            description=t("discord_restart_desc", reason=reason),
+            description=t("discord_restart_desc", reason=reason or t("restart_reason_manual")),
             color=self.color_warning,
         )
 
@@ -484,7 +484,7 @@ class DiscordWebhook:
                 title=t("discord_daily_reward_title"),
                 description=(
                     f"{t('discord_daily_reward_claimed')}\n"
-                    f"{t('discord_daily_reward_rarity', rarity=rarity)}"
+                    f"{t('discord_daily_reward_rarity', rarity=t_rarity(rarity))}"
                 ),
                 color=self.color_success,
                 fields=[

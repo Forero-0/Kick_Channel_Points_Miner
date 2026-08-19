@@ -60,3 +60,18 @@ def t(key, **kwargs):
         text = text.replace(f"{{{k}}}", str(v))
 
     return text
+
+
+def t_rarity(rarity):
+    """
+    Translate a raw Kick API card rarity value (e.g. "common", "epic")
+    into the active language, using the "rarity_<value>" keys.
+
+    Falls back to "rarity_unknown" for missing/unrecognized values so a
+    raw, untranslated API string is never shown to the user.
+    """
+    key = f"rarity_{str(rarity).strip().lower()}" if rarity else "rarity_unknown"
+    text = language_data.get(key) or _fallback_data.get(key)
+    if text is None:
+        text = language_data.get("rarity_unknown") or _fallback_data.get("rarity_unknown", "Unknown")
+    return text

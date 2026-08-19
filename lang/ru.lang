@@ -260,5 +260,18 @@
   "discord_daily_reward_title": "🎯 Ежедневная награда",
   "discord_daily_reward_claimed": "✅ Ежедневное задание получено!",
   "discord_daily_reward_rarity": "🏆 Редкость награды: **{rarity}**",
-  "discord_daily_reward_consolation": "🎁 У вас уже была эта награда. Вы получили **+{minutes} мин.** времени просмотра для повышения уровня"
+  "discord_daily_reward_consolation": "🎁 У вас уже была эта награда. Вы получили **+{minutes} мин.** времени просмотра для повышения уровня",
+
+  "rarity_common": "Обычная",
+  "rarity_uncommon": "Необычная",
+  "rarity_rare": "Редкая",
+  "rarity_epic": "Эпическая",
+  "rarity_legendary": "Легендарная",
+  "rarity_mythic": "Мифическая",
+  "rarity_unknown": "Неизвестная",
+
+  "restart_reason_user_stopped": "Остановлено пользователем (Ctrl+C)",
+  "restart_reason_system_exit": "SystemExit",
+  "restart_reason_manual": "Вручную",
+  "unknown_alias": "Неизвестно"
 }

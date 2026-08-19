@@ -260,5 +260,18 @@
   "discord_daily_reward_title": "🎯 Recompensa Diaria",
   "discord_daily_reward_claimed": "✅ ¡Reto diario reclamado!",
   "discord_daily_reward_rarity": "🏆 Rareza de la recompensa: **{rarity}**",
-  "discord_daily_reward_consolation": "🎁 Ya tenías esta recompensa. Obtuviste **+{minutes} min** de visualización para subir de nivel"
+  "discord_daily_reward_consolation": "🎁 Ya tenías esta recompensa. Obtuviste **+{minutes} min** de visualización para subir de nivel",
+
+  "rarity_common": "Común",
+  "rarity_uncommon": "Poco común",
+  "rarity_rare": "Raro",
+  "rarity_epic": "Épico",
+  "rarity_legendary": "Legendario",
+  "rarity_mythic": "Mítico",
+  "rarity_unknown": "Desconocida",
+
+  "restart_reason_user_stopped": "Detenido por el usuario (Ctrl+C)",
+  "restart_reason_system_exit": "SystemExit",
+  "restart_reason_manual": "Manual",
+  "unknown_alias": "Desconocido"
 }

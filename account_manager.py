@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass, field
 from loguru import logger
 
-from localization import t
+from localization import t, t_rarity
 from _websockets.ws_token import KickPoints
 from _websockets.ws_connect import KickWebSocket
 from utils.kick_utility import KickUtility
@@ -497,7 +497,7 @@ class AccountWorker:
             watch_time_minutes = None
             logger.success(t(
                 "daily_challenge_claimed",
-                alias=self.alias, rarity=rarity,
+                alias=self.alias, rarity=t_rarity(rarity),
             ))
 
         if self._discord:
