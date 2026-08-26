@@ -238,6 +238,10 @@ class DailyChallenge:
                 ))
                 continue
 
-            return {"claimed": True, "result": result}
+            return {
+                "claimed": True,
+                "result": result,
+                "window_ends_at": window_ends_at,
+            }
 
         return {"claimed": False, "already_claimed": False, "window_ends_at": None}

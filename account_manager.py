@@ -630,11 +630,15 @@ class AccountWorker:
 
                     if outcome.get("claimed"):
                         self._notify_daily_reward(outcome)
-                        window_ends_at = None
+                        window_ends_at = outcome.get("window_ends_at")
+                        remaining_seconds = None
+                        accumulated_seconds = 0.0
                         sleep_until_next_window_check = True
 
                     elif outcome.get("already_claimed"):
                         window_ends_at = outcome.get("window_ends_at")
+                        remaining_seconds = None
+                        accumulated_seconds = 0.0
                         sleep_until_next_window_check = True
 
                     elif outcome.get("in_progress"):
