@@ -18,13 +18,11 @@ class DailyChallenge:
       "in_progress" -> watch-time goal not reached yet, nothing to do.
       "claimed"     -> already claimed today, nothing to do until the next
                        challenge window starts.
-      "completed"   -> BEST GUESS for "goal reached, not yet claimed -> call
-                       claim()". Not confirmed yet. If Kick turns out to use
-                       a different value, change READY_TO_CLAIM_STATUS below
-                       (single spot, nothing else needs touching).
+      "claimable"   -> BEST GUESS for "goal reached, not yet claimed -> call
+                       claim()".
     """
 
-    READY_TO_CLAIM_STATUS = "completed"
+    READY_TO_CLAIM_STATUS = "claimable"
 
     BASE_URL = "https://web.kick.com/api/v1/gamification/challenges"
 
@@ -204,7 +202,7 @@ class DailyChallenge:
         for challenge in challenges:
             status = challenge.get("status")
             challenge_id = challenge.get("id")
-            condition = challenge.get("condition", {})
+            condition = challenge.get("condition") or {}
             progress = condition.get("progress", 0)
             threshold = condition.get("threshold", 0)
             window = challenge.get("window", {}) or {}
@@ -220,7 +218,7 @@ class DailyChallenge:
                     "window_ends_at": window_ends_at,
                 }
 
-            if status != "claimable":
+            if status != self.READY_TO_CLAIM_STATUS:
                 remaining = max(threshold - progress, 0)
                 return {
                     "claimed": False,
