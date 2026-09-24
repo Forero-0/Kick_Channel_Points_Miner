@@ -42,6 +42,16 @@
 
   "ClaimDailyReward": false,
 
+  "Drops": {
+    "enabled": false,
+    "games": [],
+    "campaigns": [],
+    "auto_claim": false,
+    "check_interval": 300,
+    "max_global_streamers": 24,
+    "offline_checks_to_switch": 2
+  },
+
   "Accounts": [
     {
       "alias": "Main Account",
@@ -55,7 +65,8 @@
       "token": "YOUR_KICK_TOKEN_2",
       "proxy": "socks5://user:pass@proxy2:1080",
       "streamers": ["streamer2", "streamer3", "streamer4"],
-      "max_concurrent": 1
+      "max_concurrent": 1,
+      "drops": { "enabled": true, "games": ["Rust"] }
     }
   ],
 

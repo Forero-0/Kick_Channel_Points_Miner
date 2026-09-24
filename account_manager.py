@@ -11,6 +11,7 @@ from _websockets.ws_connect import KickWebSocket
 from utils.kick_utility import KickUtility
 from utils.get_points_amount import PointsAmount
 from utils.daily_challenge import DailyChallenge
+from utils.drops_miner import DropsMiner
 
 if TYPE_CHECKING:
     from discord_webhook import DiscordWebhook
@@ -65,6 +66,7 @@ class AccountWorker:
         stagger_min: float = 3.0,
         stagger_max: float = 8.0,
         daily_challenge_enabled: bool = False,
+        drops_cfg: Optional[dict] = None,
     ):
         self.alias = account_cfg["alias"]
         self.token = account_cfg["token"]
@@ -106,6 +108,25 @@ class AccountWorker:
 
         self._rebalance_lock = asyncio.Lock()
         self._running = False
+
+        # --- Drops (optional). Per-account settings override the global
+        # ones, so one account can mine drops while another does not.
+        merged = dict(drops_cfg or {})
+        merged.update(account_cfg.get("drops") or {})
+        self.drops_enabled = bool(merged.get("enabled", False))
+        self._drops_cfg = merged
+        self._drops: Optional[DropsMiner] = None
+        self._drops_task: Optional[asyncio.Task] = None
+
+        # The websocket used for drops. Kept apart from the channel-points
+        # rebalancing so points priority/displacement never tears down a
+        # drops session, and drops never eat into `max_concurrent`.
+        self._drops_ws: Optional[KickWebSocket] = None
+        self._drops_ws_task: Optional[asyncio.Task] = None
+        # True when drops piggy-backs on a websocket that channel points
+        # already opened for the same streamer (one viewer per channel).
+        self._drops_shares_points_ws = False
+        self._drops_shared_slug: Optional[str] = None
 
     def set_discord(self, discord: "DiscordWebhook"):
         self._discord = discord
@@ -151,6 +172,19 @@ class AccountWorker:
             self._daily_challenge_task = asyncio.create_task(
                 self._daily_challenge_loop()
             )
+
+        if self.drops_enabled:
+            self._drops = DropsMiner(
+                alias=self.alias,
+                token=self.token,
+                drops_cfg=self._drops_cfg,
+                proxy=self.proxy,
+                check_interval=self.check_interval,
+            )
+            self._drops.bind(
+                self._drops_start_watching, self._drops_stop_watching,
+            )
+            self._drops_task = asyncio.create_task(self._drops.run())
 
         try:
             await self._check_all_online()
@@ -369,6 +403,8 @@ class AccountWorker:
                 "now_watching", alias=self.alias, streamer=name,
             ))
 
+            await self._drops_merge_into_points_ws(name)
+
         except Exception as e:
             logger.error(t(
                 "error_starting_streamer",
@@ -387,8 +423,85 @@ class AccountWorker:
                     self.alias, name, str(e)
                 )
 
+    async def _drops_adopt_after_points_stop(self, name: str, st):
+        """
+        Channel points is about to tear down the websocket of `name`. If
+        drops was riding on that same connection, it would be left
+        "watching" a channel with no viewer connection at all (and the
+        API-only liveness check would never notice). Give drops its own
+        connection to the same stream first.
+        """
+        if not (
+            self._drops_shares_points_ws
+            and self._drops_shared_slug == name
+            and self._drops is not None
+        ):
+            return
+
+        stream_id = st.stream_id
+        channel_id = st.channel_id
+        self._drops_shares_points_ws = False
+        self._drops_shared_slug = None
+
+        # allow_share=False: the points connection for `name` is the very
+        # one being torn down, so it must not be picked for reuse again.
+        ok = await self._drops_start_watching(
+            name, stream_id, channel_id, allow_share=False,
+        )
+        if not ok and self._drops is not None:
+            # Could not keep the drops viewer alive: tell the miner so it
+            # re-evaluates immediately instead of believing it is watching.
+            self._drops.session = None
+
+    async def _drops_merge_into_points_ws(self, name: str):
+        """
+        Channel points just opened a websocket for `name`. If drops was
+        already watching that same streamer through its OWN connection,
+        the channel would have two viewers from one account. Drop the
+        drops-only connection and ride on the points one instead.
+        """
+        if not (
+            self._drops is not None
+            and self._drops.watching_slug == name
+            and not self._drops_shares_points_ws
+            and self._drops_ws is not None
+        ):
+            return
+
+        st = self.state.streamers[name]
+        if not (st.is_watching and st.ws_client is not None):
+            return
+        if (
+            self._drops.session is not None
+            and self._drops.session.stream_id != st.stream_id
+        ):
+            # Different livestream id: not the same viewing session.
+            return
+
+        task, ws = self._drops_ws_task, self._drops_ws
+        self._drops_ws = None
+        self._drops_ws_task = None
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        if ws is not None:
+            try:
+                await ws.disconnect()
+            except Exception:
+                pass
+
+        self._drops_shares_points_ws = True
+        self._drops_shared_slug = name
+        logger.debug(t(
+            "drops_reusing_points_ws", alias=self.alias, streamer=name,
+        ))
+
     async def _stop_streamer(self, name: str):
         st = self.state.streamers[name]
+        await self._drops_adopt_after_points_stop(name, st)
 
         for task in (st.ws_task, st.points_task):
             if task and not task.done():
@@ -464,6 +577,130 @@ class AccountWorker:
                     "points_error_for",
                     alias=self.alias, streamer=name, error=e,
                 ))
+
+    # ------------------------------------------------------------ drops
+
+    async def _drops_start_watching(
+        self,
+        slug: str,
+        stream_id: Optional[int],
+        channel_id: Optional[int],
+        allow_share: bool = True,
+    ) -> bool:
+        """
+        Callback for DropsMiner: start "watching" `slug` so Kick counts
+        drops time. Returns True when a viewer connection is in place.
+
+        If channel points is already watching this exact streamer with a
+        live websocket, that connection is reused (Kick sees a single
+        viewer instead of two on the same channel). Otherwise a dedicated
+        websocket is opened.
+        """
+        # Never keep two drops connections at once.
+        await self._drops_stop_watching(slug)
+
+        pts = self.state.streamers.get(slug)
+        if (
+            allow_share
+            and pts is not None
+            and pts.is_watching
+            and pts.ws_client is not None
+            and pts.stream_id == stream_id
+        ):
+            self._drops_shares_points_ws = True
+            self._drops_shared_slug = slug
+            logger.debug(t(
+                "drops_reusing_points_ws", alias=self.alias, streamer=slug,
+            ))
+            return True
+
+        try:
+            ws_token = await asyncio.to_thread(
+                self._get_ws_token_getter().get_ws_token, slug
+            )
+            if not ws_token:
+                raise RuntimeError(t("failed_get_ws_token_for", streamer=slug))
+            if not channel_id:
+                raise RuntimeError(t("failed_get_channel_id_for", streamer=slug))
+
+            async def on_disconnect():
+                logger.warning(t(
+                    "streamer_disconnected_final",
+                    alias=self.alias, streamer=slug,
+                ))
+
+            ws_client = KickWebSocket(
+                data={
+                    "token": ws_token,
+                    "streamId": stream_id or 0,
+                    "channelId": channel_id,
+                },
+                proxy=self.proxy,
+                on_disconnect=on_disconnect,
+            )
+            self._drops_ws = ws_client
+            self._drops_shares_points_ws = False
+            self._drops_shared_slug = None
+            self._drops_ws_task = asyncio.create_task(
+                self._drops_ws_wrapper(ws_client)
+            )
+            return True
+
+        except Exception as e:
+            logger.error(t(
+                "error_starting_streamer",
+                alias=self.alias, streamer=slug, error=e,
+            ))
+            self._drops_ws = None
+            self._drops_ws_task = None
+            if self._discord:
+                self._discord.send_error(self.alias, slug, str(e))
+            if self._tg_bot:
+                self._tg_bot.send_error(self.alias, slug, str(e))
+            return False
+
+    async def _drops_ws_wrapper(self, ws_client: KickWebSocket):
+        try:
+            await ws_client.connect()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(t(
+                "ws_crashed", alias=self.alias, streamer="drops", error=e,
+            ))
+
+    async def _drops_stop_watching(self, slug: Optional[str] = None):
+        """
+        Callback for DropsMiner: drop the drops-only viewer connection.
+        A websocket shared with channel points is left untouched: it is
+        owned (and torn down) by the points logic.
+        """
+        if self._drops_shares_points_ws:
+            self._drops_shares_points_ws = False
+            self._drops_shared_slug = None
+            return
+
+        task, ws = self._drops_ws_task, self._drops_ws
+        self._drops_ws = None
+        self._drops_ws_task = None
+
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        if ws is not None:
+            try:
+                await ws.disconnect()
+            except Exception:
+                pass
+
+    @property
+    def is_drops_watching(self) -> bool:
+        return bool(self._drops and self._drops.is_watching)
+
+    # ------------------------------------------------------------ /drops
 
     def _notify_daily_reward(self, outcome: dict):
         """
@@ -597,7 +834,9 @@ class AccountWorker:
                         remaining_seconds = None
                         accumulated_seconds = 0.0
 
-                is_watching = self.state.active_count > 0
+                is_watching = (
+                    self.state.active_count > 0 or self.is_drops_watching
+                )
 
                 # Accumulate BEFORE evaluating the threshold. Previously the
                 # threshold was checked first and the increment happened in
@@ -718,6 +957,16 @@ class AccountWorker:
             except asyncio.CancelledError:
                 pass
 
+        if self._drops_task and not self._drops_task.done():
+            self._drops_task.cancel()
+            try:
+                await self._drops_task
+            except asyncio.CancelledError:
+                pass
+        self._drops_task = None
+        self._drops = None
+        await self._drops_stop_watching()
+
         for name in list(self.state.streamers):
             if self.state.streamers[name].is_watching:
                 await self._stop_streamer(name)
@@ -747,6 +996,14 @@ class AccountWorker:
             "max_concurrent": self.max_concurrent,
             "active_count": self.state.active_count,
             "active_streamers": self.state.active_names,
+            "drops": (
+                {
+                    "enabled": True,
+                    "watching": self._drops.watching_slug,
+                }
+                if self._drops else {"enabled": self.drops_enabled,
+                                     "watching": None}
+            ),
             "streamer_order": self.state.streamer_order,
             "streamers": {
                 name: {
@@ -796,6 +1053,13 @@ class AccountManager:
         if not isinstance(daily_challenge_enabled, bool):
             daily_challenge_enabled = False
 
+        # Global Drops settings. Each account can override them with its
+        # own "drops" block; `enabled` defaults to False so nothing changes
+        # for existing configs.
+        drops_cfg = config.get("Drops", {})
+        if not isinstance(drops_cfg, dict):
+            drops_cfg = {}
+
         # Backward compatibility with the old single-account config format
         accounts = config.get("Accounts", [])
         if not accounts:
@@ -823,6 +1087,7 @@ class AccountManager:
                     stagger_min=stagger_min,
                     stagger_max=stagger_max,
                     daily_challenge_enabled=daily_challenge_enabled,
+                    drops_cfg=drops_cfg,
                 )
             )
 

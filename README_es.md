@@ -20,6 +20,7 @@ Un potente bot asíncrono para farmear automáticamente puntos de canal en **Kic
 *   **🌐 Multilenguaje:** Soporta Inglés y Ruso (y esta traducción al Español).
 *   **📉 Registro Inteligente:** Salida de consola limpia con modo Debug opcional.
 *   **♻️ Seguro en memoria:** Reutiliza y cierra sesiones correctamente — sin fugas durante ejecuciones largas.
+*   **🎁 Minado de Drops:** Vigila las campañas de drops de Kick por WebSocket (sin navegador), se sincroniza con el progreso real de Kick y cambia de canal automáticamente.
 
 ---
 
@@ -327,6 +328,50 @@ Cuando se reclama una recompensa, la notificación muestra:
 * 🏆 La rareza de la recompensa, con la imagen de la carta adjunta solo si `send_daily_reward_card` de ese canal es `true`
 * 🎁 O, si ya tenías esa carta, cuántos minutos extra de tiempo de visualización obtuviste para tu siguiente nivel
 
+### 🎁 Minado de Drops
+
+Vigila las **campañas de drops** de Kick por ti.
+
+**Cómo funciona:**
+1. Pregunta a Kick qué campañas están activas y cuánto llevas *realmente* en cada una.
+2. Elige la primera campaña a la que aún le falta tiempo, saltando las expiradas y las ya reclamadas.
+3. Busca un canal en vivo para ella y empieza a verlo. **El progreso de Kick es la fuente de verdad**: el minero lo relee cada `check_interval` segundos y pasa a la siguiente en cuanto una campaña se completa.
+4. Si el streamer se desconecta, cambia de juego o reinicia el stream, cambia automáticamente a otro canal de la campaña.
+
+**Configuración** (todo es opcional; los drops están **apagados** salvo que `enabled` sea `true`):
+```json
+{
+  "Drops": {
+    "enabled": true,
+    "games": ["Rust"],
+    "campaigns": [],
+    "auto_claim": false,
+    "check_interval": 300,
+    "max_global_streamers": 24,
+    "offline_checks_to_switch": 2
+  }
+}
+```
+
+| Parámetro | Descripción |
+| :--- | :--- |
+| `enabled` | Interruptor general. `false` (por defecto) deja el miner exactamente como estaba. |
+| `games` | Solo mina campañas de estos juegos (nombre, coincidencia parcial, sin distinguir mayúsculas). |
+| `campaigns` | Solo mina estas campañas (id o parte del nombre). **El orden es la prioridad.** |
+| `auto_claim` | Reservado. El reclamo automático **aún no** está disponible (ver abajo). |
+| `check_interval` | Segundos entre revisiones de progreso/estado (por defecto `300`, mínimo `60`). |
+| `max_global_streamers` | En campañas "globales", cuántos streamers en vivo del juego considerar (por defecto `24`). |
+| `offline_checks_to_switch` | Comprobaciones "offline" seguidas antes de abandonar un canal (por defecto `2`). |
+
+Sin `games` **ni** `campaigns`, se minan todas las campañas activas. También puedes sobrescribir el bloque **por cuenta**:
+```json
+{ "alias": "Main", "token": "...", "streamers": ["a"], "drops": { "enabled": true, "games": ["Rust"] } }
+```
+
+**Dos tipos de campaña** (se detectan automáticamente):
+*   **Campañas por canales** — solo cuentan los streamers que Kick lista.
+*   **Campañas globales** — cuenta *cualquier* streamer del juego; el minero elige en vivo de la categoría del juego.
+
 ---
 
 ## 🌐 Soporte de Proxy
@@ -356,7 +401,9 @@ Kick_Channel_Points_Miner/
 │   └── ws_token.py            # Obtención de token WS
 ├── utils/
 │   ├── kick_utility.py        # Obtención de Channel/Stream ID
-│   └── get_points_amount.py   # Comprobación de balance de puntos
+│   ├── get_points_amount.py   # Comprobación de balance de puntos
+│   ├── drops_api.py           # Cliente de la API de campañas/progreso de drops
+│   └── drops_miner.py         # Coordinador del minado de drops
 ├── discord_webhook.py         # Notificador de Discord
 ├── telegram.py                # Notificador de Telegram
 └── lang/

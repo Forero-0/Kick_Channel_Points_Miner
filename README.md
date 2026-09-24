@@ -20,6 +20,7 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
 *   **🌐 Multi-language:** Support for English, Russian and Spanish.
 *   **📉 Smart Logging:** Clean console output with optional Debug mode.
 *   **♻️ Memory-Safe:** Sessions are reused and properly closed – no memory leaks during long runs.
+*   **🎁 Drops Mining:** Watches Kick drop campaigns via WebSocket (no browser), syncs with Kick's real progress, and fails over between channels automatically.
 
 ---
 
@@ -327,6 +328,50 @@ When a reward is claimed, the notification shows:
 * 🏆 The reward's rarity, with its card image attached only if that channel's `send_daily_reward_card` is `true`
 * 🎁 Or, if you already owned that card, how many extra watch-time minutes you got towards your next level instead
 
+### 🎁 Drops Mining
+
+Watches Kick **drop campaigns** for you.
+
+**How it works:**
+1. Asks Kick which campaigns are active and how far *you* actually are in each one.
+2. Picks the first campaign that still needs time, skipping expired and already-claimed ones.
+3. Finds a live channel for it and starts watching. **Kick's own progress is the source of truth** — the miner re-reads it every `check_interval` seconds and moves on as soon as a campaign is complete.
+4. If the streamer goes offline, switches game, or restarts the stream, it switches to another channel of the campaign automatically.
+
+**Configuration** (everything is optional; drops are **off** unless `enabled` is `true`):
+```json
+{
+  "Drops": {
+    "enabled": true,
+    "games": ["Rust"],
+    "campaigns": [],
+    "auto_claim": false,
+    "check_interval": 300,
+    "max_global_streamers": 24,
+    "offline_checks_to_switch": 2
+  }
+}
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `enabled` | Master switch. `false` (default) leaves the miner exactly as it was. |
+| `games` | Only mine campaigns of these games (name, partial match, case-insensitive). |
+| `campaigns` | Only mine these campaigns (id or part of the name). **The order is the priority.** |
+| `auto_claim` | Reserved. Automatic claiming is **not** available yet (see below). |
+| `check_interval` | Seconds between progress/status checks (default `300`, minimum `60`). |
+| `max_global_streamers` | For "global" campaigns, how many top live streamers of the game to consider (default `24`). |
+| `offline_checks_to_switch` | Consecutive "offline" checks before abandoning a channel (default `2`). |
+
+With **no** `games` and **no** `campaigns`, every active campaign is mined. You can also override the block **per account**:
+```json
+{ "alias": "Main", "token": "...", "streamers": ["a"], "drops": { "enabled": true, "games": ["Rust"] } }
+```
+
+**Two kinds of campaign** (detected automatically):
+*   **Channel campaigns** — only the streamers Kick lists count.
+*   **Global campaigns** — *any* streamer of the game counts; the miner picks live ones from the game's category.
+
 ---
 
 ## 🌐  Proxy Support
@@ -355,7 +400,9 @@ Kick_Channel_Points_Miner/
 │   └── ws_token.py            # WS token acquisition
 ├── utils/
 │   ├── kick_utility.py        # Channel/stream ID fetching
-│   └── get_points_amount.py   # Points balance checking
+│   ├── get_points_amount.py   # Points balance checking
+│   ├── drops_api.py           # Drops campaigns/progress API client
+│   └── drops_miner.py         # Drops mining coordinator
 ├── discord_webhook.py         # Discord notifier
 ├── telegram.py                # Telegram notifier
 └── lang/
