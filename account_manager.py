@@ -125,10 +125,6 @@ class AccountWorker:
         self._drops_ws_task: Optional[asyncio.Task] = None
         self._drops_points_task: Optional[asyncio.Task] = None
         self._drops_points = {}
-        # True when drops piggy-backs on a websocket that channel points
-        # already opened for the same streamer (one viewer per channel).
-        self._drops_shares_points_ws = False
-        self._drops_shared_slug: Optional[str] = None
 
     def set_discord(self, discord: "DiscordWebhook"):
         self._discord = discord
@@ -283,7 +279,7 @@ class AccountWorker:
             # Drops earn progress on one stream at a time and have priority
             # over points. Once a drops session exists, points stay stopped
             # until that campaign session ends.
-            if self.is_drops_watching:
+            if self.points_blocked_by_drops:
                 for name in list(self.state.streamers):
                     if self.state.streamers[name].is_watching:
                         await self._stop_streamer(name)
@@ -364,6 +360,14 @@ class AccountWorker:
     async def _start_streamer(self, name: str):
         st = self.state.streamers[name]
 
+        # Hard guard: whatever called this, never open a points viewer
+        # while drops owns the account.
+        if self.points_blocked_by_drops:
+            logger.debug(t(
+                "points_blocked_by_drops", alias=self.alias, streamer=name,
+            ))
+            return
+
         try:
             if not st.channel_id:
                 utility = self._get_utility(name)
@@ -424,8 +428,6 @@ class AccountWorker:
                 "now_watching", alias=self.alias, streamer=name,
             ))
 
-            await self._drops_merge_into_points_ws(name)
-
         except Exception as e:
             logger.error(t(
                 "error_starting_streamer",
@@ -444,85 +446,8 @@ class AccountWorker:
                     self.alias, name, str(e)
                 )
 
-    async def _drops_adopt_after_points_stop(self, name: str, st):
-        """
-        Channel points is about to tear down the websocket of `name`. If
-        drops was riding on that same connection, it would be left
-        "watching" a channel with no viewer connection at all (and the
-        API-only liveness check would never notice). Give drops its own
-        connection to the same stream first.
-        """
-        if not (
-            self._drops_shares_points_ws
-            and self._drops_shared_slug == name
-            and self._drops is not None
-        ):
-            return
-
-        stream_id = st.stream_id
-        channel_id = st.channel_id
-        self._drops_shares_points_ws = False
-        self._drops_shared_slug = None
-
-        # allow_share=False: the points connection for `name` is the very
-        # one being torn down, so it must not be picked for reuse again.
-        ok = await self._drops_start_watching(
-            name, stream_id, channel_id, allow_share=False,
-        )
-        if not ok and self._drops is not None:
-            # Could not keep the drops viewer alive: tell the miner so it
-            # re-evaluates immediately instead of believing it is watching.
-            self._drops.session = None
-
-    async def _drops_merge_into_points_ws(self, name: str):
-        """
-        Channel points just opened a websocket for `name`. If drops was
-        already watching that same streamer through its OWN connection,
-        the channel would have two viewers from one account. Drop the
-        drops-only connection and ride on the points one instead.
-        """
-        if not (
-            self._drops is not None
-            and self._drops.watching_slug == name
-            and not self._drops_shares_points_ws
-            and self._drops_ws is not None
-        ):
-            return
-
-        st = self.state.streamers[name]
-        if not (st.is_watching and st.ws_client is not None):
-            return
-        if (
-            self._drops.session is not None
-            and self._drops.session.stream_id != st.stream_id
-        ):
-            # Different livestream id: not the same viewing session.
-            return
-
-        task, ws = self._drops_ws_task, self._drops_ws
-        self._drops_ws = None
-        self._drops_ws_task = None
-        if task and not task.done():
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-        if ws is not None:
-            try:
-                await ws.disconnect()
-            except Exception:
-                pass
-
-        self._drops_shares_points_ws = True
-        self._drops_shared_slug = name
-        logger.debug(t(
-            "drops_reusing_points_ws", alias=self.alias, streamer=name,
-        ))
-
     async def _stop_streamer(self, name: str):
         st = self.state.streamers[name]
-        await self._drops_adopt_after_points_stop(name, st)
 
         for task in (st.ws_task, st.points_task):
             if task and not task.done():
@@ -657,35 +582,22 @@ class AccountWorker:
         slug: str,
         stream_id: Optional[int],
         channel_id: Optional[int],
-        allow_share: bool = True,
     ) -> bool:
         """
         Callback for DropsMiner: start "watching" `slug` so Kick counts
         drops time. Returns True when a viewer connection is in place.
 
-        If channel points is already watching this exact streamer with a
-        live websocket, that connection is reused (Kick sees a single
-        viewer instead of two on the same channel). Otherwise a dedicated
-        websocket is opened.
+        Drops always gets its OWN websocket. Channel points is held off
+        for as long as drops has work (see `points_blocked_by_drops`), so
+        the account never has two viewers and never watches a stream that
+        isn't the campaign's.
         """
         # Never keep two drops connections at once.
         await self._drops_stop_watching(slug)
 
-        pts = self.state.streamers.get(slug)
-        if (
-            allow_share
-            and pts is not None
-            and pts.is_watching
-            and pts.ws_client is not None
-            and pts.stream_id == stream_id
-        ):
-            self._drops_shares_points_ws = True
-            self._drops_shared_slug = slug
-            await self._pause_points_for_drops(slug, keep_slug=True)
-            logger.debug(t(
-                "drops_reusing_points_ws", alias=self.alias, streamer=slug,
-            ))
-            return True
+        # Make sure no points viewer is left over from before drops took
+        # over (e.g. it was opened before the first drops tick).
+        await self._pause_points_for_drops(slug)
 
         try:
             ws_token = await asyncio.to_thread(
@@ -712,12 +624,9 @@ class AccountWorker:
                 on_disconnect=on_disconnect,
             )
             self._drops_ws = ws_client
-            self._drops_shares_points_ws = False
-            self._drops_shared_slug = None
             self._drops_ws_task = asyncio.create_task(
                 self._drops_ws_wrapper(ws_client)
             )
-            await self._pause_points_for_drops(slug)
             try:
                 initial_points = await asyncio.to_thread(
                     self._get_points_checker().get_amount,
@@ -745,12 +654,10 @@ class AccountWorker:
                 self._tg_bot.send_error(self.alias, slug, str(e))
             return False
 
-    async def _pause_points_for_drops(
-        self, slug: str, keep_slug: bool = False
-    ):
-        """Release points viewers, keeping only a truly shared channel."""
+    async def _pause_points_for_drops(self, slug: Optional[str] = None):
+        """Release every channel-points viewer while drops is active."""
         for name, st in list(self.state.streamers.items()):
-            if (not keep_slug or name != slug) and st.is_watching:
+            if st.is_watching:
                 await self._stop_streamer(name)
 
     async def _drops_ws_wrapper(self, ws_client: KickWebSocket):
@@ -777,11 +684,6 @@ class AccountWorker:
                 pass
         self._drops_points_task = None
 
-        if self._drops_shares_points_ws:
-            self._drops_shares_points_ws = False
-            self._drops_shared_slug = None
-            return
-
         task, ws = self._drops_ws_task, self._drops_ws
         self._drops_ws = None
         self._drops_ws_task = None
@@ -801,6 +703,21 @@ class AccountWorker:
     @property
     def is_drops_watching(self) -> bool:
         return bool(self._drops and self._drops.is_watching)
+
+    @property
+    def points_blocked_by_drops(self) -> bool:
+        """
+        Channel points must stay OFF while drops owns the account.
+
+        That is the case both while a drops session is running AND while
+        there is still a pending campaign but no session yet (nobody live
+        right now, a channel just dropped, first tick not finished...).
+        Only checking `is_drops_watching` left exactly that gap open, and
+        the points streamers took the connection in it.
+        """
+        if not self._drops:
+            return False
+        return self._drops.is_watching or self._drops.has_pending_work
 
     def _notify_drops_event(self, event: str, data: dict):
         if event == "started":
@@ -827,6 +744,23 @@ class AccountWorker:
             message = t(
                 "drops_event_reward_ready",
                 campaign=data.get("campaign"), rewards=data.get("rewards"),
+            )
+        elif event == "reward_claimed":
+            message = t(
+                "drops_event_reward_claimed",
+                campaign=data.get("campaign"), reward=data.get("reward"),
+            )
+        elif event == "claim_needs_link":
+            message = t(
+                "drops_event_claim_needs_link",
+                campaign=data.get("campaign"), reward=data.get("reward"),
+                url=data.get("url"),
+            )
+        elif event == "claim_failed":
+            message = t(
+                "drops_event_claim_failed",
+                campaign=data.get("campaign"), reward=data.get("reward"),
+                error=data.get("error"),
             )
         elif event == "claim_unavailable":
             message = t(

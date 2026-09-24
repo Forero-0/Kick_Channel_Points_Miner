@@ -1,5 +1,6 @@
 import asyncio
 import random
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional
@@ -112,6 +113,17 @@ class DropsMiner:
             drops_cfg.get("offline_checks_to_switch", 2)
         ))
 
+        # How long (seconds) channel points stays blocked after drops
+        # LOST its channel while a campaign is still pending. It only
+        # has to cover the reconnect gap (channel restarted, next
+        # candidate being picked). If nobody streams the campaign for
+        # longer than this, points are released instead of the account
+        # sitting idle for hours.
+        self.points_grace_seconds: int = max(0, int(
+            drops_cfg.get("points_grace_seconds", 600)
+        ))
+        self._last_active_at: float = 0.0   # monotonic, 0 = never
+
         self.api = DropsAPI(token, proxy=proxy)
 
         self.targets: Dict[str, DropCampaignTarget] = {}
@@ -120,10 +132,23 @@ class DropsMiner:
         self._start_cb: Optional[Callable] = None
         self._stop_cb: Optional[Callable] = None
         self._event_cb: Optional[Callable] = None
+        # Claim bookkeeping (runtime only, Kick stays the source of truth).
+        #   _claimed_ok:   reward ids we claimed successfully this run
+        #   _claim_blocked: reward id -> retry-not-before (monotonic s)
+        #                   used so an unlinked game account or a
+        #                   transient failure doesn't retry every tick
+        self._claimed_ok: set = set()
+        self._claim_blocked: Dict[str, float] = {}
+        self._claim_retry_seconds = max(300, int(
+            drops_cfg.get("claim_retry_seconds", 1800)
+        ))
         self._offline_strikes = 0
         self._no_live_reported = False
         self._no_pending_reported = False
         self._running = False
+        # True after the first successful campaign refresh: before that we
+        # don't know if there is pending work, so we don't claim it.
+        self._running_once = False
         self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------ wiring
@@ -152,6 +177,30 @@ class DropsMiner:
     @property
     def watching_slug(self) -> Optional[str]:
         return self.session.slug if self.session else None
+
+    @property
+    def has_pending_work(self) -> bool:
+        """
+        True while there is at least one campaign still worth watching.
+
+        The account worker uses this to keep channel points OFF even in
+        the moments where drops has no session yet (first tick still
+        running, a channel just went offline and the next one is being
+        picked, ...). Without it, points streamers grab the connection in
+        that gap and the account ends up watching the wrong stream.
+        """
+        if not self._running_once:
+            return False
+        if not any(not tg.done for tg in self.targets.values()):
+            return False
+        if self.session is not None:
+            return True
+        # No session: only hold points back inside the grace window that
+        # follows the last time drops actually had a channel. Never having
+        # had one (nobody live yet) or being past the window releases them.
+        if self._last_active_at <= 0:
+            return False
+        return (time.monotonic() - self._last_active_at) < self.points_grace_seconds
 
     # -------------------------------------------- campaign discovery/select
 
@@ -252,6 +301,7 @@ class DropsMiner:
             new_targets[c["id"]] = target
 
         self.targets = new_targets
+        self._running_once = True
         return True
 
     def pending_targets(self) -> List[DropCampaignTarget]:
@@ -378,6 +428,7 @@ class DropsMiner:
         self._offline_strikes = 0
         self._no_live_reported = False
         self._no_pending_reported = False
+        self._last_active_at = time.monotonic()
 
         logger.success(t(
             "drops_now_watching",
@@ -395,6 +446,8 @@ class DropsMiner:
             return
         slug = self.session.slug
         self.session = None
+        # Start of the grace window (see `has_pending_work`).
+        self._last_active_at = time.monotonic()
         if self._stop_cb:
             try:
                 await self._stop_cb(slug)
@@ -410,19 +463,31 @@ class DropsMiner:
 
     async def _maybe_claim(self, target: DropCampaignTarget):
         """
-        Placeholder-safe hook. The original project never claims, and the
-        claim endpoint for drops is not confirmed, so this only logs a
-        reminder unless the user opted in AND an endpoint is available.
+        Claim every reward that reached 100% and is not claimed yet.
+
+        With `auto_claim` off it only reports the reward as ready. With it
+        on, it POSTs to Kick's claim endpoint once per reward:
+
+          * success            -> remembered, never claimed twice.
+          * needs account link -> Kick returned a `connect_url` (e.g. the
+            Krafton account is not linked). Retrying is useless until the
+            user links it, so it is reported ONCE and retried only after
+            `claim_retry_seconds` (default 30 min).
+          * other failure      -> same back-off, so a bad moment doesn't
+            turn into a request every cycle.
         """
         claimable = [
             r for r in target.reward_lines
-            if r.get("progress", 0) >= 1.0 and not r.get("claimed")
+            if r.get("progress", 0) >= 1.0
+            and not r.get("claimed")
+            and r.get("id")
+            and r.get("id") not in self._claimed_ok
         ]
         if not claimable:
             return
 
-        names = ", ".join(str(r.get("name")) for r in claimable)
         if not self.auto_claim:
+            names = ", ".join(str(r.get("name")) for r in claimable)
             logger.success(t(
                 "drops_reward_ready_manual",
                 alias=self.alias, campaign=target.name, rewards=names,
@@ -432,13 +497,63 @@ class DropsMiner:
             )
             return
 
-        logger.warning(t(
-            "drops_claim_not_supported",
-            alias=self.alias, campaign=target.name,
-        ))
-        self._emit_event(
-            "claim_unavailable", campaign=target.name, rewards=names
-        )
+        now = time.monotonic()
+        for reward in claimable:
+            rid = str(reward["id"])
+            rname = str(reward.get("name") or rid)
+
+            if self._claim_blocked.get(rid, 0.0) > now:
+                continue
+
+            result = await asyncio.to_thread(
+                self.api.claim_reward, rid, target.campaign_id,
+            )
+
+            if result.get("ok"):
+                self._claimed_ok.add(rid)
+                self._claim_blocked.pop(rid, None)
+                # Reflect it locally right away instead of waiting for
+                # the next progress refresh.
+                reward["claimed"] = True
+                logger.success(t(
+                    "drops_claim_success",
+                    alias=self.alias, campaign=target.name, reward=rname,
+                ))
+                self._emit_event(
+                    "reward_claimed", campaign=target.name, reward=rname,
+                )
+                # Small pause between claims: several rewards finishing
+                # together shouldn't produce a burst of identical POSTs.
+                await asyncio.sleep(random.uniform(1.5, 3.5))
+                continue
+
+            # Failure: back off. Report it only the first time for this
+            # reward, so a permanently unlinked account isn't spammed.
+            first_time = rid not in self._claim_blocked
+            self._claim_blocked[rid] = now + self._claim_retry_seconds
+
+            if result.get("needs_link"):
+                logger.warning(t(
+                    "drops_claim_needs_link",
+                    alias=self.alias, campaign=target.name, reward=rname,
+                    url=result.get("connect_url") or "",
+                ))
+                if first_time:
+                    self._emit_event(
+                        "claim_needs_link", campaign=target.name,
+                        reward=rname, url=result.get("connect_url") or "",
+                    )
+            else:
+                logger.warning(t(
+                    "drops_claim_failed",
+                    alias=self.alias, campaign=target.name, reward=rname,
+                    error=result.get("details") or result.get("type"),
+                ))
+                if first_time:
+                    self._emit_event(
+                        "claim_failed", campaign=target.name, reward=rname,
+                        error=str(result.get("details") or ""),
+                    )
 
     # --------------------------------------------------------------- loop
 

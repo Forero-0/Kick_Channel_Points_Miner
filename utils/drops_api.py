@@ -273,6 +273,77 @@ class DropsAPI:
 
         return out
 
+
+    # -------------------------------------------------------------- claim
+
+    def claim_reward(self, reward_id: str, campaign_id: str) -> dict:
+        """
+        Claim ONE drop reward.
+
+        POST https://web.kick.com/api/v1/drops/claim
+            {"reward_id": "...", "campaign_id": "..."}
+
+        Returns a normalized dict so the caller never has to parse Kick's
+        response shape:
+
+          {"ok": True,  "claim_id": "...", "message": "Success"}
+          {"ok": False, "type": "INVALID_CLAIM", "details": "...",
+           "connect_url": "https://accounts.krafton.com/...",
+           "needs_link": True}          # account not linked to the game
+          {"ok": False, "type": "HTTP_ERROR" | "REQUEST_ERROR", ...}
+
+        `needs_link` is True when Kick answers with a `connect_url`: the
+        reward is real but the user has not linked the game account, so
+        retrying every cycle is pointless until they do it by hand.
+        """
+        url = f"{self.WEB_BASE}/drops/claim"
+        payload = {"reward_id": reward_id, "campaign_id": campaign_id}
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+            "x-app-platform": "web",
+        }
+
+        try:
+            resp = self.session.post(
+                url, headers=headers, json=payload, timeout=15,
+            )
+        except Exception as e:
+            logger.error(t("drops_request_error", url=url, error=str(e)))
+            return {
+                "ok": False, "type": "REQUEST_ERROR",
+                "details": str(e), "connect_url": None, "needs_link": False,
+            }
+
+        try:
+            raw = resp.content.decode("utf-8", errors="ignore")
+            body = json.loads(raw) if raw and raw.strip() else {}
+        except Exception:
+            body = {}
+
+        data = body.get("data") if isinstance(body, dict) else None
+        data = data if isinstance(data, dict) else {}
+
+        # Success: 2xx and no error `type` in the payload.
+        if 200 <= resp.status_code < 300 and not data.get("type"):
+            return {
+                "ok": True,
+                "claim_id": data.get("id"),
+                "message": (
+                    body.get("message") if isinstance(body, dict) else None
+                ) or "Success",
+            }
+
+        connect_url = data.get("connect_url")
+        return {
+            "ok": False,
+            "type": data.get("type") or "HTTP_ERROR",
+            "details": data.get("details") or f"HTTP {resp.status_code}",
+            "connect_url": connect_url,
+            "needs_link": bool(connect_url),
+            "status": resp.status_code,
+        }
+
     # -------------------------------------------------------- live status
 
     def get_channel_state(self, slug: str) -> Optional[dict]:

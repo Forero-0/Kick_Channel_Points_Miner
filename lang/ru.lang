@@ -326,4 +326,11 @@
   ,"drops_event_progress_unavailable": "Прогресс Kick недоступен; продолжаю без него"
   ,"drops_event_global_no_category": "У глобальной кампании нет категории: {campaign}"
   ,"drops_event_wrong_category": "{streamer} не соответствует категории {campaign}"
+  ,"drops_claim_success": "✅ [{alias}] Награда получена в '{campaign}': {reward}"
+  ,"drops_claim_needs_link": "🔗 [{alias}] Нельзя получить '{reward}' в '{campaign}': сначала привяжите игровой аккаунт -> {url}"
+  ,"drops_claim_failed": "⚠️ [{alias}] Не удалось получить '{reward}' в '{campaign}': {error}"
+  ,"points_blocked_by_drops": "[{alias}] Пропуск {streamer}: сейчас приоритет у дропсов"
+  ,"drops_event_reward_claimed": "Награда получена в {campaign}: {reward}"
+  ,"drops_event_claim_needs_link": "Привяжите игровой аккаунт, чтобы получить {reward} ({campaign}): {url}"
+  ,"drops_event_claim_failed": "Не удалось получить {reward} ({campaign}): {error}"
 }

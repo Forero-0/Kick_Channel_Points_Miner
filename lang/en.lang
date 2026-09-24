@@ -326,4 +326,11 @@
   ,"drops_event_progress_unavailable": "Kick progress is unavailable; continuing without it"
   ,"drops_event_global_no_category": "Global campaign has no category: {campaign}"
   ,"drops_event_wrong_category": "{streamer} does not match {campaign}'s category"
+  ,"drops_claim_success": "✅ [{alias}] Reward claimed in '{campaign}': {reward}"
+  ,"drops_claim_needs_link": "🔗 [{alias}] Can't claim '{reward}' in '{campaign}': link your game account first -> {url}"
+  ,"drops_claim_failed": "⚠️ [{alias}] Claim failed for '{reward}' in '{campaign}': {error}"
+  ,"points_blocked_by_drops": "[{alias}] Skipping {streamer}: drops has priority right now"
+  ,"drops_event_reward_claimed": "Reward claimed in {campaign}: {reward}"
+  ,"drops_event_claim_needs_link": "Link your game account to claim {reward} ({campaign}): {url}"
+  ,"drops_event_claim_failed": "Claim failed for {reward} ({campaign}): {error}"
 }
