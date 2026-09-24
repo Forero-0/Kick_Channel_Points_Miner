@@ -1,3 +1,11 @@
+# Приоритет дропсов
+
+Если `Drops.enabled` включён и есть подходящая активная кампания, дропсы имеют приоритет над очками: аккаунт смотрит только один канал. Если канал есть в списке стримеров, соединение переиспользуется для одновременной добычи; при смене категории или потере подходящего статуса выбирается другой канал. После завершения кампаний или при отсутствии подходящего канала возвращается обычная добыча очков.
+
+`drops_events` отдельно выбирает события дропсов в Discord и Telegram: `started`, `stopped`, `progress`, `reward_ready`, `claim_unavailable`, `campaign_finished`, `no_pending`, `no_live_channel`, `category_changed`, `stream_restarted`, `refresh_failed`, `loop_error`, `progress_unavailable`, `global_no_category` и `wrong_category`. `include_category_in_points` добавляет текущую категорию к каждому уведомлению о полученных очках. Очки, полученные на канале дропсов, также отправляются в том же формате с пометкой `Drops mining`.
+
+Интеграция дропсов вдохновлена [KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner), которому здесь указаны кредиты. Реализация использует собственную интеграцию API/WebSocket и не связана с тем проектом.
+
 # 🟢 Kick Channel Points Miner
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)

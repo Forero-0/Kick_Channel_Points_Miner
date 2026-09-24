@@ -21,6 +21,8 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
 *   **📉 Smart Logging:** Clean console output with optional Debug mode.
 *   **♻️ Memory-Safe:** Sessions are reused and properly closed – no memory leaks during long runs.
 *   **🎁 Drops Mining:** Watches Kick drop campaigns via WebSocket (no browser), syncs with Kick's real progress, and fails over between channels automatically.
+*   **🔀 Drops First:** While an eligible drop campaign is active, one account watches exactly one eligible channel for drops. Points resume after the campaign is completed or no eligible channel remains.
+*   **📣 Detailed Notifications:** Drops events can be enabled independently, and points notifications can optionally include the stream category.
 
 ---
 
@@ -60,6 +62,21 @@ A powerful, asynchronous bot for automatically farming channel points on **Kick.
     "notify_startup": true,
     "notify_restart": true,
     "notify_daily_reward": true,
+    "drops_events": {
+      "started": true,
+      "stopped": true,
+      "progress": true,
+      "reward_ready": true,
+      "claim_unavailable": true,
+      "campaign_finished": true,
+      "no_pending": true,
+      "no_live_channel": true,
+      "category_changed": true,
+      "stream_restarted": true,
+      "refresh_failed": true,
+      "loop_error": true
+    },
+    "include_category_in_points": false,
     "min_points_gain": 10,
     "send_daily_reward_card": false
   },
@@ -138,6 +155,14 @@ The old single-account format is automatically converted:
     *   `notify_points` / `notify_status_change` / `notify_errors` / `notify_startup` / `notify_restart` / `notify_daily_reward`: Toggle which event types get sent to Telegram. All `true` (send everything) by default.
     *   `min_points_gain`: Minimum points gain to trigger a `notify_points` notification.
     *   `send_daily_reward_card`: Whether the daily-reward card image is sent as an actual photo. `false` by default (text only); set to `true` if you also want the image.
+    *   `drops_events`: Independently choose which drops events to send: `started`, `stopped`, `progress`, `reward_ready`, `claim_unavailable`, `campaign_finished`, `no_pending`, `no_live_channel`, `category_changed`, `stream_restarted`, `refresh_failed`, `loop_error`, `progress_unavailable`, `global_no_category` and `wrong_category`.
+    *   `include_category_in_points`: Add the current stream category to each points-earned notification.
+  *   **`Discord`**: Uses its own `drops_events` and `include_category_in_points` options independently from Telegram.
+  *   **`Drops`**:
+    *   `enabled`: Enable campaign discovery and mining for the account (global or per-account).
+    *   `games` / `campaigns`: Restrict which campaigns are eligible. Empty lists accept all active campaigns.
+    *   `auto_claim`: Reports claimable rewards; automatic claiming is not currently supported by the API integration.
+    *   `check_interval`: Seconds between campaign/progress checks.
 *   **`Proxy.enabled`**: Enable global proxy for all accounts.
     *   `Proxy.url`: Global proxy URL (`socks5://`, `http://`, `https://`).
 *   **`Check_interval`**: Seconds between online status checks (default: `120`).
@@ -195,6 +220,10 @@ The bot will:
 3. Connect to the top N (by priority) for each account
 4. Dynamically rebalance when streamers go online/offline
 5. Automatically restart on crashes
+
+When drops are enabled and a pending campaign has an eligible live channel, drops have priority over channel points and only that channel is watched. The first drops decision is made before normal streamer selection, so an online followed streamer cannot take priority first. A followed streamer is reused for drops when it qualifies, which can mine both goals with one connection. Points earned on a drops-only channel are also reported with the same points message and marked as `Drops mining`. If the channel changes category or stops qualifying, the drops selector moves to another eligible channel. Once drops are complete, or no eligible channel is available, normal streamer priority resumes.
+
+The drops integration is inspired by and credits [KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner). This project uses its own API/WebSocket integration and is not affiliated with that project.
 
 ### 📱 Telegram Notifications
 
@@ -337,6 +366,7 @@ Watches Kick **drop campaigns** for you.
 2. Picks the first campaign that still needs time, skipping expired and already-claimed ones.
 3. Finds a live channel for it and starts watching. **Kick's own progress is the source of truth** — the miner re-reads it every `check_interval` seconds and moves on as soon as a campaign is complete.
 4. If the streamer goes offline, switches game, or restarts the stream, it switches to another channel of the campaign automatically.
+5. Progress, rewards, channel changes, unavailable channels and errors can each be enabled or disabled independently under `Telegram.drops_events` and `Discord.drops_events`.
 
 **Configuration** (everything is optional; drops are **off** unless `enabled` is `true`):
 ```json

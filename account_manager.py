@@ -123,6 +123,8 @@ class AccountWorker:
         # drops session, and drops never eat into `max_concurrent`.
         self._drops_ws: Optional[KickWebSocket] = None
         self._drops_ws_task: Optional[asyncio.Task] = None
+        self._drops_points_task: Optional[asyncio.Task] = None
+        self._drops_points = {}
         # True when drops piggy-backs on a websocket that channel points
         # already opened for the same streamer (one viewer per channel).
         self._drops_shares_points_ws = False
@@ -182,8 +184,18 @@ class AccountWorker:
                 check_interval=self.check_interval,
             )
             self._drops.bind(
-                self._drops_start_watching, self._drops_stop_watching,
+                self._drops_start_watching,
+                self._drops_stop_watching,
+                self._notify_drops_event,
             )
+            # Make the first drops decision before the normal points
+            # rebalance can occupy any streamer connection.
+            try:
+                await self._drops.tick()
+            except Exception as e:
+                logger.error(t(
+                    "drops_loop_error", alias=self.alias, error=str(e),
+                ))
             self._drops_task = asyncio.create_task(self._drops.run())
 
         try:
@@ -268,6 +280,15 @@ class AccountWorker:
 
     async def _rebalance(self):
         async with self._rebalance_lock:
+            # Drops earn progress on one stream at a time and have priority
+            # over points. Once a drops session exists, points stay stopped
+            # until that campaign session ends.
+            if self.is_drops_watching:
+                for name in list(self.state.streamers):
+                    if self.state.streamers[name].is_watching:
+                        await self._stop_streamer(name)
+                return
+
             online_by_priority = [
                 name
                 for name in self.state.streamer_order
@@ -561,14 +582,15 @@ class AccountWorker:
                         gain=gain, amount=amount,
                     ))
 
-                    if self._discord:
-                        self._discord.send_points_update(
-                            self.alias, name, old, amount
-                        )
-                    if self._tg_bot:
-                        self._tg_bot.send_points_update(
-                            self.alias, name, old, amount
-                        )
+                    source = (
+                        "drops"
+                        if self.is_drops_watching
+                        and self._drops.watching_slug == name
+                        else None
+                    )
+                    await self._notify_points_gain(
+                        name, old, amount, source=source
+                    )
 
             except asyncio.CancelledError:
                 break
@@ -577,6 +599,56 @@ class AccountWorker:
                     "points_error_for",
                     alias=self.alias, streamer=name, error=e,
                 ))
+
+    async def _notify_points_gain(
+        self, streamer: str, old: int, amount: int, source: str = None
+    ):
+        category = None
+        wants_category = bool(
+            self._discord and self._discord.include_category
+        ) or bool(self._tg_bot and self._tg_bot.include_category)
+        if wants_category:
+            category = await asyncio.to_thread(
+                self._get_utility(streamer).get_category_name,
+                self.token,
+            )
+
+        if self._discord:
+            self._discord.send_points_update(
+                self.alias, streamer, old, amount,
+                category=category, source=source,
+            )
+        if self._tg_bot:
+            self._tg_bot.send_points_update(
+                self.alias, streamer, old, amount,
+                category=category, source=source,
+            )
+
+    async def _drops_points_loop(self, streamer: str):
+        """Poll points for a drops-only channel as well."""
+        checker = self._get_points_checker()
+        try:
+            while self._running:
+                await asyncio.sleep(random.uniform(120, 180))
+                amount = await asyncio.to_thread(
+                    checker.get_amount, streamer, self.token
+                )
+                if amount is None:
+                    continue
+                old = self._drops_points.get(streamer, amount)
+                self._drops_points[streamer] = amount
+                if amount > old:
+                    gain = amount - old
+                    logger.success(t(
+                        "points_gain",
+                        alias=self.alias, streamer=streamer,
+                        gain=gain, amount=amount,
+                    ))
+                    await self._notify_points_gain(
+                        streamer, old, amount, source="drops"
+                    )
+        except asyncio.CancelledError:
+            pass
 
     # ------------------------------------------------------------ drops
 
@@ -609,6 +681,7 @@ class AccountWorker:
         ):
             self._drops_shares_points_ws = True
             self._drops_shared_slug = slug
+            await self._pause_points_for_drops(slug, keep_slug=True)
             logger.debug(t(
                 "drops_reusing_points_ws", alias=self.alias, streamer=slug,
             ))
@@ -644,6 +717,19 @@ class AccountWorker:
             self._drops_ws_task = asyncio.create_task(
                 self._drops_ws_wrapper(ws_client)
             )
+            await self._pause_points_for_drops(slug)
+            try:
+                initial_points = await asyncio.to_thread(
+                    self._get_points_checker().get_amount,
+                    slug, self.token,
+                )
+            except Exception:
+                initial_points = None
+            if initial_points is not None:
+                self._drops_points[slug] = initial_points
+            self._drops_points_task = asyncio.create_task(
+                self._drops_points_loop(slug)
+            )
             return True
 
         except Exception as e:
@@ -658,6 +744,14 @@ class AccountWorker:
             if self._tg_bot:
                 self._tg_bot.send_error(self.alias, slug, str(e))
             return False
+
+    async def _pause_points_for_drops(
+        self, slug: str, keep_slug: bool = False
+    ):
+        """Release points viewers, keeping only a truly shared channel."""
+        for name, st in list(self.state.streamers.items()):
+            if (not keep_slug or name != slug) and st.is_watching:
+                await self._stop_streamer(name)
 
     async def _drops_ws_wrapper(self, ws_client: KickWebSocket):
         try:
@@ -675,6 +769,14 @@ class AccountWorker:
         A websocket shared with channel points is left untouched: it is
         owned (and torn down) by the points logic.
         """
+        if self._drops_points_task and not self._drops_points_task.done():
+            self._drops_points_task.cancel()
+            try:
+                await self._drops_points_task
+            except asyncio.CancelledError:
+                pass
+        self._drops_points_task = None
+
         if self._drops_shares_points_ws:
             self._drops_shares_points_ws = False
             self._drops_shared_slug = None
@@ -699,6 +801,78 @@ class AccountWorker:
     @property
     def is_drops_watching(self) -> bool:
         return bool(self._drops and self._drops.is_watching)
+
+    def _notify_drops_event(self, event: str, data: dict):
+        if event == "started":
+            message = t(
+                "drops_event_started",
+                streamer=data.get("streamer"),
+                campaign=data.get("campaign"),
+                game=data.get("game"),
+            )
+        elif event == "campaign_finished":
+            message = t(
+                "drops_event_finished", campaign=data.get("campaign")
+            )
+        elif event == "no_live_channel":
+            message = t("drops_event_no_live")
+        elif event == "no_pending":
+            message = t("drops_event_no_pending")
+        elif event == "progress":
+            message = t(
+                "drops_event_progress", campaign=data.get("campaign"),
+                units=data.get("units"), target=data.get("target"),
+            )
+        elif event == "reward_ready":
+            message = t(
+                "drops_event_reward_ready",
+                campaign=data.get("campaign"), rewards=data.get("rewards"),
+            )
+        elif event == "claim_unavailable":
+            message = t(
+                "drops_event_claim_unavailable",
+                campaign=data.get("campaign"),
+            )
+        elif event == "category_changed":
+            message = t(
+                "drops_event_category_changed",
+                streamer=data.get("streamer"),
+            )
+        elif event == "stream_restarted":
+            message = t(
+                "drops_event_stream_restarted",
+                streamer=data.get("streamer"),
+            )
+        elif event == "refresh_failed":
+            message = t("drops_event_refresh_failed")
+        elif event == "loop_error":
+            message = t(
+                "drops_event_loop_error", error=data.get("error")
+            )
+        elif event == "progress_unavailable":
+            message = t("drops_event_progress_unavailable")
+        elif event == "global_no_category":
+            message = t(
+                "drops_event_global_no_category",
+                campaign=data.get("campaign"),
+            )
+        elif event == "wrong_category":
+            message = t(
+                "drops_event_wrong_category",
+                streamer=data.get("streamer"),
+                campaign=data.get("campaign"),
+            )
+        else:
+            message = t(
+                "drops_event_stopped",
+                streamer=data.get("streamer"),
+                reason=data.get("reason"),
+            )
+
+        if self._discord:
+            self._discord.send_drops_event(self.alias, event, message)
+        if self._tg_bot:
+            self._tg_bot.send_drops_event(self.alias, event, message)
 
     # ------------------------------------------------------------ /drops
 

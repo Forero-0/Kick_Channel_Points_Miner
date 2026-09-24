@@ -119,15 +119,31 @@ class DropsMiner:
 
         self._start_cb: Optional[Callable] = None
         self._stop_cb: Optional[Callable] = None
+        self._event_cb: Optional[Callable] = None
         self._offline_strikes = 0
+        self._no_live_reported = False
+        self._no_pending_reported = False
         self._running = False
         self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------ wiring
 
-    def bind(self, start_watching: Callable, stop_watching: Callable):
+    def bind(
+        self,
+        start_watching: Callable,
+        stop_watching: Callable,
+        event_cb: Optional[Callable] = None,
+    ):
         self._start_cb = start_watching
         self._stop_cb = stop_watching
+        self._event_cb = event_cb
+
+    def _emit_event(self, event: str, **data):
+        if self._event_cb:
+            try:
+                self._event_cb(event, data)
+            except Exception as e:
+                logger.debug(f"drops event callback error: {e}")
 
     @property
     def is_watching(self) -> bool:
@@ -187,6 +203,7 @@ class DropsMiner:
             # on with "no progress known" instead of dropping everything,
             # and say so: it usually means the token is expired.
             logger.warning(t("drops_progress_unavailable", alias=self.alias))
+            self._emit_event("progress_unavailable")
             progress = []
 
         progress_by_id = {p["id"]: p for p in progress if p.get("id")}
@@ -269,6 +286,9 @@ class DropsMiner:
                     "drops_global_no_category",
                     alias=self.alias, campaign=target.name,
                 ))
+                self._emit_event(
+                    "global_no_category", campaign=target.name
+                )
                 return []
             return await asyncio.to_thread(
                 self.api.get_live_streamers,
@@ -300,7 +320,6 @@ class DropsMiner:
             state = await asyncio.to_thread(
                 self.api.get_channel_state, slug
             )
-            await asyncio.sleep(random.uniform(0.8, 2.0))
 
             if state is None:
                 # Blocked/failed: unknown, NOT "live". Try the next one.
@@ -316,6 +335,10 @@ class DropsMiner:
                     "drops_wrong_category",
                     alias=self.alias, streamer=slug,
                 ))
+                self._emit_event(
+                    "wrong_category", streamer=slug,
+                    campaign=target.name,
+                )
                 continue
             if not state["channel_id"]:
                 continue
@@ -353,12 +376,18 @@ class DropsMiner:
             channel_id=choice["channel_id"],
         )
         self._offline_strikes = 0
+        self._no_live_reported = False
+        self._no_pending_reported = False
 
         logger.success(t(
             "drops_now_watching",
             alias=self.alias, streamer=choice["slug"],
             campaign=target.name, game=target.game,
         ))
+        self._emit_event(
+            "started", streamer=choice["slug"], campaign=target.name,
+            game=target.game,
+        )
         return True
 
     async def _end(self, reason: str = ""):
@@ -375,6 +404,7 @@ class DropsMiner:
             "drops_stopped_watching",
             alias=self.alias, streamer=slug, reason=reason,
         ))
+        self._emit_event("stopped", streamer=slug, reason=reason)
 
     # ------------------------------------------------------------ claiming
 
@@ -397,12 +427,18 @@ class DropsMiner:
                 "drops_reward_ready_manual",
                 alias=self.alias, campaign=target.name, rewards=names,
             ))
+            self._emit_event(
+                "reward_ready", campaign=target.name, rewards=names
+            )
             return
 
         logger.warning(t(
             "drops_claim_not_supported",
             alias=self.alias, campaign=target.name,
         ))
+        self._emit_event(
+            "claim_unavailable", campaign=target.name, rewards=names
+        )
 
     # --------------------------------------------------------------- loop
 
@@ -415,6 +451,7 @@ class DropsMiner:
         ok = await self.refresh_campaigns()
         if not ok:
             logger.warning(t("drops_refresh_failed", alias=self.alias))
+            self._emit_event("refresh_failed")
             return
 
         for target in self.targets.values():
@@ -428,6 +465,7 @@ class DropsMiner:
                     "drops_campaign_finished",
                     alias=self.alias, campaign=name,
                 ))
+                self._emit_event("campaign_finished", campaign=name)
                 await self._end(t("drops_reason_finished"))
             elif current:
                 logger.info(t(
@@ -436,6 +474,11 @@ class DropsMiner:
                     units=current.progress_units,
                     target=current.target_minutes,
                 ))
+                self._emit_event(
+                    "progress", campaign=current.name,
+                    units=current.progress_units,
+                    target=current.target_minutes,
+                )
 
     async def _verify_current(self) -> str:
         """
@@ -491,6 +534,9 @@ class DropsMiner:
                 "drops_category_changed",
                 alias=self.alias, streamer=self.session.slug,
             ))
+            self._emit_event(
+                "category_changed", streamer=self.session.slug
+            )
             return VERDICT_SWITCH
 
         # The stream restarted with a new id: the websocket must follow.
@@ -499,6 +545,9 @@ class DropsMiner:
                 "drops_stream_restarted",
                 alias=self.alias, streamer=self.session.slug,
             ))
+            self._emit_event(
+                "stream_restarted", streamer=self.session.slug
+            )
             return VERDICT_RECONNECT
 
         return VERDICT_OK
@@ -519,7 +568,12 @@ class DropsMiner:
                 if self.session:
                     await self._end(t("drops_reason_finished"))
                 logger.info(t("drops_nothing_pending", alias=self.alias))
+                if not self._no_pending_reported:
+                    self._emit_event("no_pending")
+                    self._no_pending_reported = True
                 return
+
+            self._no_pending_reported = False
 
             # A higher-priority campaign appeared/is available while we
             # are on a lower one: only switch if the current is done, to
@@ -548,6 +602,9 @@ class DropsMiner:
                     logger.warning(
                         t("drops_no_live_channel", alias=self.alias)
                     )
+                    if not self._no_live_reported:
+                        self._emit_event("no_live_channel")
+                        self._no_live_reported = True
                     return
 
                 dead = self.session.slug
@@ -559,6 +616,9 @@ class DropsMiner:
 
             if not await self._choose_and_start():
                 logger.info(t("drops_no_live_channel", alias=self.alias))
+                if not self._no_live_reported:
+                    self._emit_event("no_live_channel")
+                    self._no_live_reported = True
 
     async def run(self):
         """Main loop. Cancel the task to stop."""
@@ -580,6 +640,7 @@ class DropsMiner:
                     logger.error(t(
                         "drops_loop_error", alias=self.alias, error=str(e),
                     ))
+                    self._emit_event("loop_error", error=str(e))
 
                 jitter = random.uniform(
                     self.check_interval * 0.85,

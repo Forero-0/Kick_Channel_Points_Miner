@@ -122,6 +122,7 @@
   "error_getting_livestream": "❌ Error al obtener el stream en vivo: {error}",
   "error_getting_stream_from_channel": "❌ Error al obtener el stream desde el endpoint del canal: {error}",
   "error_getting_channel_id": "❌ Error al obtener el ID del canal: {error}",
+  "category_lookup_failed": "No se pudo consultar la categoría de {username}: {error}",
   "initializing_points_session": "🔄 Iniciando sesión de puntos...",
   "points_bypass_success": "✅ La sesión de puntos evadió Cloudflare",
   "getting_points_amount": "💰 Comprobando el saldo de puntos...",
@@ -143,6 +144,8 @@
   "discord_footer": "Kick Channel Points Miner",
   "discord_field_limit": "Límite",
   "discord_points_title": "💰 Puntos ganados",
+  "discord_field_category": "Categoría",
+  "discord_drops_title": "🎁 Drops",
   "discord_field_streamer": "Streamer",
   "discord_field_gained": "Ganados",
   "discord_field_total": "Total",
@@ -226,6 +229,12 @@
   "tg_send_failed": "❌ Fallo al enviar mensaje a {user_id}: {error}",
   "tg_startup_title": "🚀 <b>Miner iniciado</b>",
   "tg_points_gained": "💰 {streamer}: +{gain} (Total: {total})",
+  "tg_points_category": "Categoría: {category}",
+  "discord_field_source": "Origen",
+  "discord_source_drops": "Minería de drops",
+  "tg_points_source": "Origen: {source}",
+  "tg_source_drops": "Minería de drops",
+  "tg_drops_title": "Drops",
   "tg_streamer_status": "{icon} {streamer} — {action} (#{priority})",
   "tg_action_started": "viendo",
   "tg_action_displaced": "desplazado",
@@ -302,4 +311,19 @@
   "drops_loop_error": "❌ [{alias}] Error en el ciclo de drops: {error}",
   "drops_reason_restarted": "el canal reinició su stream",
   "drops_reusing_points_ws": "♻️ [{alias}] Drops: reutilizando la conexión de puntos para {streamer}"
+  ,"drops_event_started": "Comenzó a minar {campaign} en {streamer} ({game})",
+  "drops_event_finished": "Campaña completada: {campaign}",
+  "drops_event_stopped": "Se dejó de minar {streamer}: {reason}",
+  "drops_event_no_live": "Los drops están activos, pero no hay ningún canal elegible en vivo",
+  "drops_event_no_pending": "Los drops están activos, pero no hay campañas pendientes"
+  ,"drops_event_progress": "{campaign}: progreso {units}/{target} min"
+  ,"drops_event_reward_ready": "Recompensa lista en {campaign}: {rewards}"
+  ,"drops_event_claim_unavailable": "El reclamo automático no está disponible para {campaign}"
+  ,"drops_event_category_changed": "{streamer} cambió de categoría; buscando otro canal"
+  ,"drops_event_stream_restarted": "{streamer} reinició el stream; reconectando"
+  ,"drops_event_refresh_failed": "No se pudieron actualizar los datos de drops; se reintentará"
+  ,"drops_event_loop_error": "Error en el ciclo de drops: {error}"
+  ,"drops_event_progress_unavailable": "El progreso de Kick no está disponible; se continúa sin él"
+  ,"drops_event_global_no_category": "La campaña global no tiene categoría: {campaign}"
+  ,"drops_event_wrong_category": "{streamer} no coincide con la categoría de {campaign}"
 }

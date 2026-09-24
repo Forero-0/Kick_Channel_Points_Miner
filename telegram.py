@@ -45,6 +45,30 @@ class TelegramBot:
         self.notify_startup = tg_cfg.get("notify_startup", True)
         self.notify_restart = tg_cfg.get("notify_restart", True)
         self.notify_daily_reward = tg_cfg.get("notify_daily_reward", True)
+        default_drop_events = {
+            "started": True,
+            "stopped": True,
+            "progress": True,
+            "reward_ready": True,
+            "claim_unavailable": True,
+            "campaign_finished": True,
+            "no_pending": True,
+            "no_live_channel": True,
+            "category_changed": True,
+            "stream_restarted": True,
+            "refresh_failed": True,
+            "loop_error": True,
+            "progress_unavailable": True,
+            "global_no_category": True,
+            "wrong_category": True,
+        }
+        self.drops_events = default_drop_events
+        configured_drop_events = tg_cfg.get("drops_events", {})
+        if isinstance(configured_drop_events, dict):
+            self.drops_events.update(configured_drop_events)
+        self.include_category = tg_cfg.get(
+            "include_category_in_points", False
+        )
         self.min_points_gain = tg_cfg.get("min_points_gain", 10)
 
         # Whether to send the daily-reward card as an actual photo.
@@ -159,6 +183,8 @@ class TelegramBot:
 
     def send_points_update(
         self, account_alias, streamer, old_amount, new_amount,
+        category=None,
+        source=None,
     ):
         """Notification: points earned"""
         if not self.enabled or not self.notify_points:
@@ -174,6 +200,14 @@ class TelegramBot:
             streamer=f"<b>{html.escape(streamer)}</b>",
             gain=gain, total=new_amount,
         )
+        if self.include_category and category:
+            text += "\n" + t(
+                "tg_points_category", category=html.escape(category)
+            )
+        if source == "drops":
+            text += "\n" + t(
+                "tg_points_source", source=t("tg_source_drops")
+            )
         self._send_message(text)
 
     def send_streamer_online(
@@ -199,6 +233,17 @@ class TelegramBot:
             priority=priority,
         )
         self._send_message(text)
+
+    def send_drops_event(self, account_alias, event, message):
+        """Notification: drops session or campaign event."""
+        if not self.enabled or not self.drops_events.get(event, True):
+            return
+
+        self._send_message(
+            f"[{html.escape(account_alias)}] "
+            f"<b>{html.escape(t('tg_drops_title'))}</b>\n"
+            f"{html.escape(message)}"
+        )
 
     def send_error(self, account_alias, streamer, error):
         """Notification: error occurred"""

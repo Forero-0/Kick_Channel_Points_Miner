@@ -1,3 +1,11 @@
+# Minería de drops y prioridad
+
+Cuando `Drops.enabled` está activo, una campaña pendiente con un canal elegible tiene prioridad sobre los puntos: cada cuenta mira un solo canal para drops. Si ese canal también está en tu lista de streamers se reutiliza la conexión para hacer 2 por 1; si cambia de categoría o deja de ser válido, se busca otro canal elegible. Al completar las campañas, o si no hay campaña/canal disponible, vuelve la selección normal de streamers para puntos.
+
+`drops_events` permite elegir por separado en Discord y Telegram los eventos `started`, `stopped`, `progress`, `reward_ready`, `claim_unavailable`, `campaign_finished`, `no_pending`, `no_live_channel`, `category_changed`, `stream_restarted`, `refresh_failed`, `loop_error`, `progress_unavailable`, `global_no_category` y `wrong_category`. `include_category_in_points` añade la categoría actual a cada aviso de puntos ganados. Los puntos obtenidos en un canal de drops también se notifican con el mismo formato y se marcan como `Drops mining`.
+
+La integración de drops está inspirada en [KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner), cuyos créditos se reconocen aquí. Esta implementación tiene su propia integración de API/WebSocket y no está afiliada a ese proyecto.
+
 # 🟢 Kick Channel Points Miner
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)

@@ -122,6 +122,7 @@
   "error_getting_livestream": "❌ Error getting livestream: {error}",
   "error_getting_stream_from_channel": "❌ Error getting stream from channel endpoint: {error}",
   "error_getting_channel_id": "❌ Error getting channel ID: {error}",
+  "category_lookup_failed": "Category lookup failed for {username}: {error}",
   "initializing_points_session": "🔄 Initializing points session...",
   "points_bypass_success": "✅ Points session bypassed Cloudflare",
   "getting_points_amount": "💰 Checking points balance...",
@@ -143,6 +144,8 @@
   "discord_footer": "Kick Channel Points Miner",
   "discord_field_limit": "Limit",
   "discord_points_title": "💰 Points Earned",
+  "discord_field_category": "Category",
+  "discord_drops_title": "🎁 Drops",
   "discord_field_streamer": "Streamer",
   "discord_field_gained": "Gained",
   "discord_field_total": "Total",
@@ -226,6 +229,12 @@
   "tg_send_failed": "❌ Telegram send to {user_id} failed: {error}",
   "tg_startup_title": "🚀 <b>Miner Started</b>",
   "tg_points_gained": "💰 {streamer}: +{gain} (Total: {total})",
+  "tg_points_category": "Category: {category}",
+  "discord_field_source": "Source",
+  "discord_source_drops": "Drops mining",
+  "tg_points_source": "Source: {source}",
+  "tg_source_drops": "Drops mining",
+  "tg_drops_title": "Drops",
   "tg_streamer_status": "{icon} {streamer} — {action} (#{priority})",
   "tg_action_started": "started watching",
   "tg_action_displaced": "displaced",
@@ -302,4 +311,19 @@
   "drops_loop_error": "❌ [{alias}] Drops loop error: {error}",
   "drops_reason_restarted": "campaign channel restarted its stream",
   "drops_reusing_points_ws": "♻️ [{alias}] Drops: reusing the channel-points connection for {streamer}"
+  ,"drops_event_started": "Started mining {campaign} on {streamer} ({game})",
+  "drops_event_finished": "Campaign completed: {campaign}",
+  "drops_event_stopped": "Stopped mining {streamer}: {reason}",
+  "drops_event_no_live": "Drops are active, but no eligible live channel is available",
+  "drops_event_no_pending": "Drops are active, but there are no pending campaigns"
+  ,"drops_event_progress": "{campaign}: progress {units}/{target} min"
+  ,"drops_event_reward_ready": "Reward ready in {campaign}: {rewards}"
+  ,"drops_event_claim_unavailable": "Automatic claiming is unavailable for {campaign}"
+  ,"drops_event_category_changed": "{streamer} changed category; looking for another channel"
+  ,"drops_event_stream_restarted": "{streamer} restarted the stream; reconnecting"
+  ,"drops_event_refresh_failed": "Could not refresh drops data; retrying"
+  ,"drops_event_loop_error": "Drops loop error: {error}"
+  ,"drops_event_progress_unavailable": "Kick progress is unavailable; continuing without it"
+  ,"drops_event_global_no_category": "Global campaign has no category: {campaign}"
+  ,"drops_event_wrong_category": "{streamer} does not match {campaign}'s category"
 }

@@ -122,6 +122,7 @@
   "error_getting_livestream": "❌ Ошибка получения livestream: {error}",
   "error_getting_stream_from_channel": "❌ Ошибка получения стрима через endpoint канала: {error}",
   "error_getting_channel_id": "❌ Ошибка получения ID канала: {error}",
+  "category_lookup_failed": "Не удалось получить категорию {username}: {error}",
   "initializing_points_session": "🔄 Инициализация сессии поинтов...",
   "points_bypass_success": "✅ Сессия поинтов обошла Cloudflare",
   "getting_points_amount": "💰 Проверка баланса...",
@@ -143,6 +144,8 @@
   "discord_footer": "Kick Channel Points Miner",
   "discord_field_limit": "Лимит",
   "discord_points_title": "💰 Получены поинты",
+  "discord_field_category": "Категория",
+  "discord_drops_title": "🎁 Дропсы",
   "discord_field_streamer": "Стример",
   "discord_field_gained": "Получено",
   "discord_field_total": "Всего",
@@ -226,6 +229,12 @@
   "tg_send_failed": "❌ Не удалось отправить сообщение пользователю {user_id}: {error}",
   "tg_startup_title": "🚀 <b>Майнер запущен</b>",
   "tg_points_gained": "💰 {streamer}: +{gain} (Всего: {total})",
+  "tg_points_category": "Категория: {category}",
+  "discord_field_source": "Источник",
+  "discord_source_drops": "Майнинг дропсов",
+  "tg_points_source": "Источник: {source}",
+  "tg_source_drops": "Майнинг дропсов",
+  "tg_drops_title": "Дропсы",
   "tg_streamer_status": "{icon} {streamer} — {action} (#{priority})",
   "tg_action_started": "просмотр начат",
   "tg_action_displaced": "вытеснен",
@@ -302,4 +311,19 @@
   "drops_loop_error": "❌ [{alias}] Ошибка цикла дропсов: {error}",
   "drops_reason_restarted": "канал перезапустил трансляцию",
   "drops_reusing_points_ws": "♻️ [{alias}] Дропсы: использую соединение для баллов на {streamer}"
+  ,"drops_event_started": "Начал майнить {campaign} на {streamer} ({game})",
+  "drops_event_finished": "Кампания завершена: {campaign}",
+  "drops_event_stopped": "Перестал майнить {streamer}: {reason}",
+  "drops_event_no_live": "Дропсы активны, но подходящего канала в эфире нет",
+  "drops_event_no_pending": "Дропсы активны, но ожидающих кампаний нет"
+  ,"drops_event_progress": "{campaign}: прогресс {units}/{target} мин"
+  ,"drops_event_reward_ready": "Награда готова в {campaign}: {rewards}"
+  ,"drops_event_claim_unavailable": "Автоматическое получение недоступно для {campaign}"
+  ,"drops_event_category_changed": "{streamer} сменил категорию; ищу другой канал"
+  ,"drops_event_stream_restarted": "{streamer} перезапустил трансляцию; переподключаюсь"
+  ,"drops_event_refresh_failed": "Не удалось обновить данные дропсов; повторю попытку"
+  ,"drops_event_loop_error": "Ошибка цикла дропсов: {error}"
+  ,"drops_event_progress_unavailable": "Прогресс Kick недоступен; продолжаю без него"
+  ,"drops_event_global_no_category": "У глобальной кампании нет категории: {campaign}"
+  ,"drops_event_wrong_category": "{streamer} не соответствует категории {campaign}"
 }

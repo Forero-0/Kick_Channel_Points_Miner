@@ -262,3 +262,26 @@ class KickUtility:
                 "error_getting_channel_id", error=str(e)
             ))
             return None
+
+    def get_category_name(self, token: str) -> str | None:
+        """Return the current live category name, when Kick provides it."""
+        self._ensure_session()
+        self.session.headers["Authorization"] = f"Bearer {token}"
+        try:
+            resp = self.session.get(
+                f"https://kick.com/api/v2/channels/{self.username}",
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                return None
+            data = self._parse_response(resp)
+            info = data.get("data", data) if isinstance(data, dict) else {}
+            livestream = info.get("livestream") or {}
+            categories = livestream.get("categories") or []
+            if categories and isinstance(categories[0], dict):
+                return categories[0].get("name")
+            category = livestream.get("category") or info.get("category")
+            return category.get("name") if isinstance(category, dict) else None
+        except Exception as e:
+            logger.debug(t("category_lookup_failed", username=self.username, error=e))
+            return None

@@ -44,6 +44,30 @@ class DiscordWebhook:
         self.notify_daily_reward = discord_cfg.get(
             "notify_daily_reward", True
         )
+        default_drop_events = {
+            "started": True,
+            "stopped": True,
+            "progress": True,
+            "reward_ready": True,
+            "claim_unavailable": True,
+            "campaign_finished": True,
+            "no_pending": True,
+            "no_live_channel": True,
+            "category_changed": True,
+            "stream_restarted": True,
+            "refresh_failed": True,
+            "loop_error": True,
+            "progress_unavailable": True,
+            "global_no_category": True,
+            "wrong_category": True,
+        }
+        self.drops_events = default_drop_events
+        configured_drop_events = discord_cfg.get("drops_events", {})
+        if isinstance(configured_drop_events, dict):
+            self.drops_events.update(configured_drop_events)
+        self.include_category = discord_cfg.get(
+            "include_category_in_points", False
+        )
         self.min_points_gain = discord_cfg.get(
             "min_points_gain", 10
         )
@@ -261,6 +285,8 @@ class DiscordWebhook:
         streamer: str,
         old_amount: int,
         new_amount: int,
+        category: str = None,
+        source: str = None,
     ):
         """Notification: points earned"""
         if not self.enabled or not self.notify_points:
@@ -281,6 +307,17 @@ class DiscordWebhook:
                 self._field(t("discord_field_account"), account_alias),
             ],
         )
+
+        if self.include_category and category:
+            embed["fields"].insert(
+                1, self._field(t("discord_field_category"), category)
+            )
+        if source == "drops":
+            embed["fields"].insert(
+                1, self._field(
+                    t("discord_field_source"), t("discord_source_drops")
+                )
+            )
 
         payload = self._build_payload([embed])
         self._send_in_thread(payload)
@@ -516,3 +553,17 @@ class DiscordWebhook:
 
         payload = self._build_payload([embed])
         self._send_in_thread(payload)
+
+    def send_drops_event(
+        self, account_alias: str, event: str, message: str
+    ):
+        """Notification: drops session or campaign event."""
+        if not self.enabled or not self.drops_events.get(event, True):
+            return
+
+        embed = self._embed(
+            title=t("discord_drops_title"),
+            description=f"[{account_alias}] {message}",
+            color=self.color_info,
+        )
+        self._send_in_thread(self._build_payload([embed]))
