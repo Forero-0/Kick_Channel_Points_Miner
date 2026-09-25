@@ -333,4 +333,8 @@
   ,"drops_event_reward_claimed": "Reward claimed in {campaign}: {reward}"
   ,"drops_event_claim_needs_link": "Link your game account to claim {reward} ({campaign}): {url}"
   ,"drops_event_claim_failed": "Claim failed for {reward} ({campaign}): {error}"
+  ,"drops_priority_switch": "🎁 [{alias}] Higher priority available, switching from '{old}' to '{new}' on {streamer}"
+  ,"drops_priority_switch_failed": "⚠️ [{alias}] Could not switch to higher-priority '{campaign}' on {streamer}, keeping the current one"
+  ,"drops_reason_priority": "higher priority campaign available"
+  ,"drops_event_priority_switch": "Switched to higher priority: {campaign} on {streamer} (was {old})"
 }

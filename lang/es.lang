@@ -333,4 +333,8 @@
   ,"drops_event_reward_claimed": "Recompensa reclamada en {campaign}: {reward}"
   ,"drops_event_claim_needs_link": "Vincula tu cuenta del juego para reclamar {reward} ({campaign}): {url}"
   ,"drops_event_claim_failed": "Falló el reclamo de {reward} ({campaign}): {error}"
+  ,"drops_priority_switch": "🎁 [{alias}] Hay una prioridad mayor disponible, cambiando de '{old}' a '{new}' en {streamer}"
+  ,"drops_priority_switch_failed": "⚠️ [{alias}] No se pudo cambiar a '{campaign}' (mayor prioridad) en {streamer}, se mantiene la actual"
+  ,"drops_reason_priority": "hay una campaña de mayor prioridad disponible"
+  ,"drops_event_priority_switch": "Cambio a mayor prioridad: {campaign} en {streamer} (antes {old})"
 }

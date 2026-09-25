@@ -26,6 +26,7 @@
       "no_live_channel": true,
       "category_changed": true,
       "stream_restarted": true,
+      "priority_switch": true,
       "refresh_failed": true,
       "loop_error": true,
       "progress_unavailable": true,
@@ -62,6 +63,7 @@
       "no_live_channel": true,
       "category_changed": true,
       "stream_restarted": true,
+      "priority_switch": true,
       "refresh_failed": true,
       "loop_error": true,
       "progress_unavailable": true,
@@ -92,7 +94,8 @@
     "claim_retry_seconds": 1800,
     "check_interval": 300,
     "max_global_streamers": 24,
-    "offline_checks_to_switch": 2
+    "offline_checks_to_switch": 2,
+    "points_grace_seconds": 600
   },
 
   "Accounts": [

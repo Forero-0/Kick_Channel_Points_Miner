@@ -777,6 +777,13 @@ class AccountWorker:
                 "drops_event_stream_restarted",
                 streamer=data.get("streamer"),
             )
+        elif event == "priority_switch":
+            message = t(
+                "drops_event_priority_switch",
+                campaign=data.get("campaign"),
+                streamer=data.get("streamer"),
+                old=data.get("old"),
+            )
         elif event == "refresh_failed":
             message = t("drops_event_refresh_failed")
         elif event == "loop_error":

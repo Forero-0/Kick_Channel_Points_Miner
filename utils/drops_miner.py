@@ -304,24 +304,56 @@ class DropsMiner:
         self._running_once = True
         return True
 
+    def _priority_of(self, target: DropCampaignTarget) -> int:
+        """
+        Priority rank of a campaign. LOWER number = HIGHER priority.
+
+        The order is a single ladder built from the config:
+
+          1. `campaigns` entries, in the order the user wrote them.
+          2. `games` entries, in the order the user wrote them.
+          3. Anything else (only reachable when no filters are set).
+
+        So a campaign listed in `campaigns` always beats a game listed
+        in `games`, and inside each list the position is the priority.
+
+        Matching is exact first (id / full name / full game name) and
+        only falls back to "contains" when nothing matches exactly. That
+        way `games: ["Rust"]` no longer claims a "Trust Fall" campaign
+        just because "rust" is a substring of "trust".
+        """
+        cid = target.campaign_id.lower()
+        name = target.name.lower()
+        game = target.game.lower()
+
+        n_camp = len(self.campaign_filters)
+        n_game = len(self.games_filter)
+
+        # Pass 1: exact matches.
+        for idx, f in enumerate(self.campaign_filters):
+            if f == cid or f == name:
+                return idx
+        for idx, g in enumerate(self.games_filter):
+            if g == game:
+                return n_camp + idx
+
+        # Pass 2: partial matches (kept for backwards compatibility).
+        for idx, f in enumerate(self.campaign_filters):
+            if f in name:
+                return idx
+        for idx, g in enumerate(self.games_filter):
+            if g in game:
+                return n_camp + idx
+
+        return n_camp + n_game
+
     def pending_targets(self) -> List[DropCampaignTarget]:
         """
-        Campaigns still worth watching, in the order the user listed
-        them (so the config order works as a priority, like streamers).
+        Campaigns still worth watching, best priority first (see
+        `_priority_of`). The sort is stable, so ties keep Kick's order.
         """
         pending = [t_ for t_ in self.targets.values() if not t_.done]
-
-        def priority(target: DropCampaignTarget) -> int:
-            for idx, f in enumerate(self.campaign_filters):
-                if f == target.campaign_id.lower() or f in target.name.lower():
-                    return idx
-            base = len(self.campaign_filters)
-            for idx, g in enumerate(self.games_filter):
-                if g == target.game.lower() or g in target.game.lower():
-                    return base + idx
-            return base + len(self.games_filter)
-
-        pending.sort(key=priority)
+        pending.sort(key=self._priority_of)
         return pending
 
     # ------------------------------------------------------ channel choice
@@ -673,6 +705,98 @@ class DropsMiner:
                 return True
         return False
 
+    async def _maybe_preempt(self, pending: List[DropCampaignTarget]) -> bool:
+        """
+        While watching a healthy channel, check whether a campaign with a
+        strictly BETTER priority can be watched right now, and switch to
+        it immediately if so.
+
+        Only campaigns ranked above the current one are considered, and a
+        switch only happens when a real live channel was found for it, so
+        an unavailable high-priority campaign never interrupts a working
+        session (no thrashing, no gap without a channel).
+        """
+        if not self.session:
+            return False
+        current = self.targets.get(self.session.campaign_id)
+        if current is None:
+            return False
+
+        current_rank = self._priority_of(current)
+        better = [
+            tg for tg in pending
+            if tg.campaign_id != current.campaign_id
+            and self._priority_of(tg) < current_rank
+        ]
+        if not better:
+            return False
+
+        old_campaign = current.name
+        old_session = self.session
+
+        for target in better:
+            choice = await self._pick_channel(target)
+            if not choice:
+                continue
+
+            # Swap the connection. The account worker closes the previous
+            # drops websocket itself before opening the new one, so there
+            # is never more than one viewer.
+            ok = False
+            if self._start_cb:
+                ok = await self._start_cb(
+                    choice["slug"], choice["stream_id"],
+                    choice["channel_id"],
+                )
+            target.tried.append(choice["slug"])
+
+            if not ok:
+                # The better channel could not be opened, so the old
+                # connection may already be gone. Restore what we had
+                # instead of leaving the account without drops.
+                logger.warning(t(
+                    "drops_priority_switch_failed",
+                    alias=self.alias, campaign=target.name,
+                    streamer=choice["slug"],
+                ))
+                if self._start_cb:
+                    restored = await self._start_cb(
+                        old_session.slug, old_session.stream_id,
+                        old_session.channel_id,
+                    )
+                    if not restored:
+                        # Nothing is being watched any more: let the next
+                        # tick pick a channel from scratch.
+                        self.session = None
+                        self._last_active_at = time.monotonic()
+                # One failed attempt is enough for this tick; the next
+                # tick retries. Avoids hammering a broken channel.
+                return False
+
+            self.session = DropsSession(
+                slug=choice["slug"],
+                campaign_id=target.campaign_id,
+                stream_id=choice["stream_id"],
+                channel_id=choice["channel_id"],
+            )
+            self._offline_strikes = 0
+            self._no_live_reported = False
+            self._last_active_at = time.monotonic()
+
+            logger.success(t(
+                "drops_priority_switch",
+                alias=self.alias, old=old_campaign, new=target.name,
+                streamer=choice["slug"],
+            ))
+            self._emit_event(
+                "priority_switch", old=old_campaign,
+                campaign=target.name, streamer=choice["slug"],
+                game=target.game,
+            )
+            return True
+
+        return False
+
     async def tick(self):
         """One decision cycle. Safe to call repeatedly."""
         async with self._lock:
@@ -690,12 +814,15 @@ class DropsMiner:
 
             self._no_pending_reported = False
 
-            # A higher-priority campaign appeared/is available while we
-            # are on a lower one: only switch if the current is done, to
-            # avoid thrashing between campaigns mid-progress.
             if self.session:
                 verdict = await self._verify_current()
                 if verdict == VERDICT_OK:
+                    # The current channel is healthy, but a campaign with a
+                    # BETTER priority may have become watchable since we
+                    # picked it (its streamer just went live, ...). If so,
+                    # move to it right away instead of waiting for the
+                    # current one to finish.
+                    await self._maybe_preempt(pending)
                     return
 
                 if verdict == VERDICT_RECONNECT:

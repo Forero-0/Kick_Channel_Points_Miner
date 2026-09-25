@@ -59,6 +59,7 @@ class TelegramBot:
             "no_live_channel": True,
             "category_changed": True,
             "stream_restarted": True,
+            "priority_switch": True,
             "refresh_failed": True,
             "loop_error": True,
             "progress_unavailable": True,
