@@ -249,6 +249,21 @@ class TelegramBot:
             f"{html.escape(message)}"
         )
 
+    def send_activity_report(self, account_alias, message):
+        """
+        Periodic "what am I watching and why" notification. The caller
+        already checked AccountWorker.activity_report_enabled, so the
+        only gate here is whether Telegram itself is enabled.
+        """
+        if not self.enabled:
+            return
+
+        self._send_message(
+            f"[{html.escape(account_alias)}] "
+            f"<b>{html.escape(t('tg_activity_report_title'))}</b>\n"
+            f"{html.escape(message)}"
+        )
+
     def send_error(self, account_alias, streamer, error):
         """Notification: error occurred"""
         if not self.enabled or not self.notify_errors:

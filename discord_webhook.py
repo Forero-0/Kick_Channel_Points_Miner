@@ -571,3 +571,21 @@ class DiscordWebhook:
             color=self.color_info,
         )
         self._send_in_thread(self._build_payload([embed]))
+
+    def send_activity_report(self, account_alias: str, message: str):
+        """
+        Periodic "what am I watching and why" notification. Purely
+        informational (see AccountWorker.activity_report_enabled): the
+        caller already checked the feature is turned on before calling
+        this, so the only gate left here is whether Discord itself is
+        enabled at all.
+        """
+        if not self.enabled:
+            return
+
+        embed = self._embed(
+            title=t("discord_activity_report_title"),
+            description=f"[{account_alias}] {message}",
+            color=self.color_info,
+        )
+        self._send_in_thread(self._build_payload([embed]))

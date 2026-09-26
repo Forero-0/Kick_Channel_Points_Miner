@@ -150,6 +150,10 @@ class DropsMiner:
         # don't know if there is pending work, so we don't claim it.
         self._running_once = False
         self._lock = asyncio.Lock()
+        # Settable from outside (account worker) to make `run()`'s sleep
+        # return immediately, e.g. right after a lost connection is
+        # reported, instead of waiting out the rest of check_interval.
+        self.wake_event: asyncio.Event = asyncio.Event()
 
     # ------------------------------------------------------------ wiring
 
@@ -888,7 +892,13 @@ class DropsMiner:
                     self.check_interval * 0.85,
                     self.check_interval * 1.15,
                 )
-                await asyncio.sleep(jitter)
+                self.wake_event.clear()
+                try:
+                    await asyncio.wait_for(
+                        self.wake_event.wait(), timeout=jitter
+                    )
+                except asyncio.TimeoutError:
+                    pass
         except asyncio.CancelledError:
             pass
         finally:
@@ -901,6 +911,32 @@ class DropsMiner:
             self.api.close()
         except Exception:
             pass
+
+    async def notify_connection_lost(self, slug: str):
+        """
+        Called by the account worker when the websocket actually used to
+        "watch" `slug` for drops has died for good (reconnection attempts
+        exhausted). Without this, the miner would only find out on the
+        NEXT tick's `_verify_current()`, which only checks whether the
+        channel is still live over HTTP: it has no way to see that the
+        viewer connection itself went silent, so a dead websocket could
+        otherwise sit unnoticed until the next check_interval (or
+        indefinitely, if nothing else ever changes on the channel side).
+
+        This only clears the session if it still matches `slug`, so a
+        callback about an already-replaced connection is a no-op.
+        """
+        async with self._lock:
+            if not self.session or self.session.slug != slug:
+                return
+            slug_now = self.session.slug
+            self.session = None
+            self._last_active_at = time.monotonic()
+            logger.warning(t(
+                "drops_connection_lost",
+                alias=self.alias, streamer=slug_now,
+            ))
+            self._emit_event("connection_lost", streamer=slug_now)
 
     # -------------------------------------------------------------- status
 

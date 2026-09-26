@@ -98,6 +98,14 @@
     "points_grace_seconds": 600
   },
 
+  "Activity_Report": {
+    "enabled": false,
+    "interval_seconds": 1800,
+    "log": true,
+    "notify": true,
+    "include_category": true
+  },
+
   "Accounts": [
     {
       "alias": "Main Account",
@@ -112,7 +120,8 @@
       "proxy": "socks5://user:pass@proxy2:1080",
       "streamers": ["streamer2", "streamer3", "streamer4"],
       "max_concurrent": 1,
-      "drops": { "enabled": true, "games": ["Rust"] }
+      "drops": { "enabled": true, "games": ["Rust"] },
+      "activity_report": { "enabled": true, "interval_seconds": 900 }
     }
   ],
 

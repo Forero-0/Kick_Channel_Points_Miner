@@ -67,6 +67,7 @@ class AccountWorker:
         stagger_max: float = 8.0,
         daily_challenge_enabled: bool = False,
         drops_cfg: Optional[dict] = None,
+        activity_report_cfg: Optional[dict] = None,
     ):
         self.alias = account_cfg["alias"]
         self.token = account_cfg["token"]
@@ -126,6 +127,30 @@ class AccountWorker:
         self._drops_points_task: Optional[asyncio.Task] = None
         self._drops_points = {}
 
+        # --- Activity report (optional, OFF by default). Periodically
+        # says what is currently being watched, its category, and WHY
+        # (channel points vs a specific drops campaign), both in the
+        # logs and, if configured, Discord/Telegram. Off by default so
+        # a normal setup doesn't get spammed with routine status lines;
+        # the user turns it on if they want visibility into what the
+        # miner is doing between the events it already reports.
+        ar_merged = dict(activity_report_cfg or {})
+        ar_merged.update(account_cfg.get("activity_report") or {})
+        self.activity_report_enabled = bool(ar_merged.get("enabled", False))
+        self.activity_report_interval = max(
+            60, int(ar_merged.get("interval_seconds", 1800))
+        )
+        self.activity_report_to_log = bool(
+            ar_merged.get("log", True)
+        )
+        self.activity_report_to_notify = bool(
+            ar_merged.get("notify", True)
+        )
+        self.activity_report_include_category = bool(
+            ar_merged.get("include_category", True)
+        )
+        self._activity_report_task: Optional[asyncio.Task] = None
+
     def set_discord(self, discord: "DiscordWebhook"):
         self._discord = discord
 
@@ -170,6 +195,15 @@ class AccountWorker:
             self._daily_challenge_task = asyncio.create_task(
                 self._daily_challenge_loop()
             )
+
+        if self.activity_report_enabled:
+            self._activity_report_task = asyncio.create_task(
+                self._activity_report_loop()
+            )
+            logger.info(t(
+                "activity_report_enabled",
+                alias=self.alias, interval=self.activity_report_interval,
+            ))
 
         if self.drops_enabled:
             self._drops = DropsMiner(
@@ -575,6 +609,130 @@ class AccountWorker:
         except asyncio.CancelledError:
             pass
 
+    # ------------------------------------------------------ activity report
+
+    def _current_watch_entries(self) -> List[dict]:
+        """
+        Snapshot of every stream this account is watching right now, each
+        with the reason it's being watched.
+
+        Returns a list of:
+          {"streamer": str, "reason": "points"|"drops",
+           "campaign": Optional[str], "game": Optional[str]}
+
+        Drops always takes exactly one entry when active (its own
+        websocket, separate from the points ones); channel points can
+        contribute up to `max_concurrent` entries, but never both for
+        the same streamer at once since drops pauses points on the
+        channel it owns (see `points_blocked_by_drops`).
+        """
+        entries: List[dict] = []
+
+        if self._drops and self._drops.is_watching:
+            slug = self._drops.watching_slug
+            campaign_name = None
+            campaign_game = None
+            current = self._drops.targets.get(
+                self._drops.session.campaign_id
+            ) if self._drops.session else None
+            if current:
+                campaign_name = current.name
+                campaign_game = current.game
+            entries.append({
+                "streamer": slug,
+                "reason": "drops",
+                "campaign": campaign_name,
+                "game": campaign_game,
+            })
+
+        for name, st in self.state.streamers.items():
+            if st.is_watching:
+                entries.append({
+                    "streamer": name,
+                    "reason": "points",
+                    "campaign": None,
+                    "game": None,
+                })
+
+        return entries
+
+    async def _activity_report_loop(self):
+        """
+        Periodically reports what this account is currently watching and
+        WHY (channel points vs. a specific drops campaign), so the user
+        can see at a glance that the miner is doing what's expected
+        without waiting for a points-gain or drops event to happen.
+
+        OFF by default (see `activity_report_enabled`): this is purely
+        informational and would otherwise add a recurring line/message
+        even when nothing changed, so it's opt-in.
+        """
+        try:
+            while self._running:
+                jitter = random.uniform(
+                    self.activity_report_interval * 0.9,
+                    self.activity_report_interval * 1.1,
+                )
+                await asyncio.sleep(jitter)
+                if not self._running:
+                    break
+                await self._send_activity_report()
+        except asyncio.CancelledError:
+            pass
+
+    async def _send_activity_report(self):
+        entries = self._current_watch_entries()
+
+        if not entries:
+            if self.activity_report_to_log:
+                logger.info(t(
+                    "activity_report_idle", alias=self.alias,
+                ))
+            if self.activity_report_to_notify:
+                self._send_activity_report_notify(
+                    t("activity_report_idle_body")
+                )
+            return
+
+        for entry in entries:
+            category = None
+            if self.activity_report_include_category:
+                try:
+                    category = await asyncio.to_thread(
+                        self._get_utility(entry["streamer"]).get_category_name,
+                        self.token,
+                    )
+                except Exception:
+                    category = None
+            category = category or t("activity_report_unknown_category")
+
+            if entry["reason"] == "drops":
+                reason_text = t(
+                    "activity_report_reason_drops",
+                    campaign=entry.get("campaign") or "?",
+                )
+            else:
+                reason_text = t("activity_report_reason_points")
+
+            if self.activity_report_to_log:
+                logger.info(t(
+                    "activity_report_line",
+                    alias=self.alias, streamer=entry["streamer"],
+                    category=category, reason=reason_text,
+                ))
+            if self.activity_report_to_notify:
+                self._send_activity_report_notify(t(
+                    "activity_report_body",
+                    streamer=entry["streamer"], category=category,
+                    reason=reason_text,
+                ))
+
+    def _send_activity_report_notify(self, body: str):
+        if self._discord:
+            self._discord.send_activity_report(self.alias, body)
+        if self._tg_bot:
+            self._tg_bot.send_activity_report(self.alias, body)
+
     # ------------------------------------------------------------ drops
 
     async def _drops_start_watching(
@@ -613,6 +771,15 @@ class AccountWorker:
                     "streamer_disconnected_final",
                     alias=self.alias, streamer=slug,
                 ))
+                # The websocket gave up reconnecting: drops was silently
+                # not earning progress on `slug` for a while. Tell the
+                # miner right away instead of waiting for it to notice on
+                # its own next tick (see notify_connection_lost).
+                if self._drops:
+                    await self._drops.notify_connection_lost(slug)
+                    # Wake the drops loop immediately so a new channel is
+                    # picked without waiting out the rest of check_interval.
+                    self._drops.wake_event.set()
 
             ws_client = KickWebSocket(
                 data={
@@ -802,6 +969,11 @@ class AccountWorker:
                 "drops_event_wrong_category",
                 streamer=data.get("streamer"),
                 campaign=data.get("campaign"),
+            )
+        elif event == "connection_lost":
+            message = t(
+                "drops_event_connection_lost",
+                streamer=data.get("streamer"),
             )
         else:
             message = t(
@@ -1072,6 +1244,14 @@ class AccountWorker:
             except asyncio.CancelledError:
                 pass
 
+        if self._activity_report_task and not self._activity_report_task.done():
+            self._activity_report_task.cancel()
+            try:
+                await self._activity_report_task
+            except asyncio.CancelledError:
+                pass
+        self._activity_report_task = None
+
         if self._drops_task and not self._drops_task.done():
             self._drops_task.cancel()
             try:
@@ -1175,6 +1355,13 @@ class AccountManager:
         if not isinstance(drops_cfg, dict):
             drops_cfg = {}
 
+        # Global activity-report settings (see AccountWorker). OFF unless
+        # the user explicitly turns it on; each account can override with
+        # its own "activity_report" block.
+        activity_report_cfg = config.get("Activity_Report", {})
+        if not isinstance(activity_report_cfg, dict):
+            activity_report_cfg = {}
+
         # Backward compatibility with the old single-account config format
         accounts = config.get("Accounts", [])
         if not accounts:
@@ -1203,6 +1390,7 @@ class AccountManager:
                     stagger_max=stagger_max,
                     daily_challenge_enabled=daily_challenge_enabled,
                     drops_cfg=drops_cfg,
+                    activity_report_cfg=activity_report_cfg,
                 )
             )
 
