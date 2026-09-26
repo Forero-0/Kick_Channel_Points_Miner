@@ -212,6 +212,7 @@ class AccountWorker:
                 drops_cfg=self._drops_cfg,
                 proxy=self.proxy,
                 check_interval=self.check_interval,
+                preferred_streamers=self.state.streamer_order,
             )
             self._drops.bind(
                 self._drops_start_watching,

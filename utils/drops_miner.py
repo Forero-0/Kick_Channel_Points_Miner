@@ -87,10 +87,16 @@ class DropsMiner:
         drops_cfg: dict,
         proxy: Optional[str] = None,
         check_interval: int = 300,
+        preferred_streamers: Optional[List[str]] = None,
     ):
         self.alias = alias
         self.token = token
         self.proxy = proxy
+        self.preferred_streamers = [
+            str(streamer).strip().lower()
+            for streamer in (preferred_streamers or [])
+            if str(streamer).strip()
+        ]
 
         self.campaign_filters: List[str] = [
             str(x).strip().lower()
@@ -376,10 +382,13 @@ class DropsMiner:
                     "global_no_category", campaign=target.name
                 )
                 return []
-            return await asyncio.to_thread(
+            live_streamers = await asyncio.to_thread(
                 self.api.get_live_streamers,
                 target.category_id, self.max_global_streamers,
             )
+            return list(dict.fromkeys(
+                live_streamers + self.preferred_streamers
+            ))
         return list(target.channels)
 
     async def _pick_channel(
@@ -393,6 +402,12 @@ class DropsMiner:
         candidates = await self._live_candidates(target)
         if not candidates:
             return None
+
+        priority = {
+            slug: index
+            for index, slug in enumerate(self.preferred_streamers)
+        }
+        candidates.sort(key=lambda slug: priority.get(slug, len(priority)))
 
         # Every candidate tried -> start a fresh cycle instead of
         # dead-locking (same idea as `tried_channels` in the reference).
