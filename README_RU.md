@@ -92,7 +92,6 @@
       "reward_ready": true,
       "reward_claimed": true,
       "claim_unavailable": true,
-      "claim_needs_link": true,
       "claim_failed": true,
       "campaign_finished": true,
       "no_pending": true,
@@ -143,7 +142,6 @@
     "campaigns": [],
     "games": [],
     "auto_claim": true,
-    "claim_retry_seconds": 1800,
     "check_interval": 300,
     "max_global_streamers": 24,
     "offline_checks_to_switch": 2,
@@ -369,7 +367,6 @@ Kick засчитывает дропсы только с одного стрим
 | `campaigns` | Майнить только эти кампании (id или название). **Порядок — это приоритет**, они стоят выше `games`. |
 | `games` | Майнить только кампании этих игр. **Порядок — это приоритет.** |
 | `auto_claim` | `true` автоматически получает награды при достижении 100 %. `false` лишь сообщает, что они готовы. По умолчанию `false` в коде (`config.example.json` поставляется с `true`). |
-| `claim_retry_seconds` | Пауза перед повтором неудачного получения, например для непривязанного игрового аккаунта (по умолчанию `1800`, минимум `300`). |
 | `check_interval` | Секунды между проверками прогресса и статуса (по умолчанию `300`, минимум `60`). |
 | `max_global_streamers` | Для глобальных кампаний — сколько топ-стримеров игры в эфире рассматривать (по умолчанию `24`). |
 | `offline_checks_to_switch` | Сколько «оффлайн»-проверок подряд до ухода с канала (по умолчанию `2`). |
@@ -388,15 +385,15 @@ Kick засчитывает дропсы только с одного стрим
 
 ### Получение наград
 
-*   Каждая награда получается один раз. Неудача повторяется только через `claim_retry_seconds`.
-*   Если Kick просит **привязать игровой аккаунт** (например, аккаунт издателя), майнер один раз сообщит об этом и покажет ссылку. Привязать его за вас он не может.
+*   Каждая награда получается один раз. Если Kick отклоняет получение (любой 4xx, например `400 INVALID_CLAIM` из-за непривязанного игрового аккаунта), оно **не повторяется**, а ссылка нигде не показывается и не отправляется. Временные сбои (ошибка сети, HTTP 5xx/408/429) повторяются при следующей проверке, до 3 раз.
+*   Кампания, у которой все награды на 100 %, считается завершённой, даже если получение не удалось, поэтому майнер переходит к следующей.
 *   При `auto_claim: false` вас уведомят, когда награда готова, и вы получаете её сами на kick.com.
 
 ### События дропсов
 
 И `Telegram.drops_events`, и `Discord.drops_events` принимают эти ключи (независимо, по умолчанию все `true`):
 
-`started`, `stopped`, `progress`, `priority_switch`, `reward_ready`, `reward_claimed`, `claim_unavailable`, `claim_needs_link`, `claim_failed`, `campaign_finished`, `no_pending`, `no_live_channel`, `category_changed`, `stream_restarted`, `refresh_failed`, `loop_error`, `progress_unavailable`, `global_no_category`, `wrong_category`.
+`started`, `stopped`, `progress`, `priority_switch`, `reward_ready`, `reward_claimed`, `claim_unavailable`, `claim_failed`, `campaign_finished`, `no_pending`, `no_live_channel`, `category_changed`, `stream_restarted`, `refresh_failed`, `loop_error`, `progress_unavailable`, `global_no_category`, `wrong_category`.
 
 `include_category_in_points` добавляет текущую категорию стрима в каждое уведомление о поинтах. Поинты, полученные на канале только для дропсов, отправляются тем же сообщением и помечаются `Drops mining`.
 

@@ -92,7 +92,6 @@ Un bot asíncrono que farmea automáticamente **puntos de canal** y mina **drops
       "reward_ready": true,
       "reward_claimed": true,
       "claim_unavailable": true,
-      "claim_needs_link": true,
       "claim_failed": true,
       "campaign_finished": true,
       "no_pending": true,
@@ -143,7 +142,6 @@ Un bot asíncrono que farmea automáticamente **puntos de canal** y mina **drops
     "campaigns": [],
     "games": [],
     "auto_claim": true,
-    "claim_retry_seconds": 1800,
     "check_interval": 300,
     "max_global_streamers": 24,
     "offline_checks_to_switch": 2,
@@ -369,7 +367,6 @@ Reglas:
 | `campaigns` | Solo mina estas campañas (id o nombre). **El orden es la prioridad** y van por encima de `games`. |
 | `games` | Solo mina campañas de estos juegos. **El orden es la prioridad.** |
 | `auto_claim` | `true` reclama las recompensas automáticamente al llegar al 100 %. `false` solo avisa de que están listas. Por defecto `false` en el código (`config.example.json` lo trae como `true`). |
-| `claim_retry_seconds` | Espera antes de reintentar un reclamo fallido, por ejemplo una cuenta de juego sin vincular (por defecto `1800`, mínimo `300`). |
 | `check_interval` | Segundos entre comprobaciones de progreso y estado (por defecto `300`, mínimo `60`). |
 | `max_global_streamers` | En campañas globales, cuántos streamers en vivo del juego se consideran (por defecto `24`). |
 | `offline_checks_to_switch` | Comprobaciones "offline" seguidas antes de abandonar un canal (por defecto `2`). |
@@ -388,7 +385,8 @@ Puedes sobrescribir todo el bloque **por cuenta**:
 
 ### Reclamo de recompensas
 
-*   Cada recompensa se reclama una sola vez. Un fallo se reintenta solo tras `claim_retry_seconds`.
+*   Cada recompensa se reclama una sola vez. Si Kick rechaza el reclamo (cualquier 4xx, p. ej. `400 INVALID_CLAIM` por cuenta del juego no vinculada) **no se reintenta** y no se muestra ni envía ningún enlace. Los fallos pasajeros (error de red, HTTP 5xx/408/429) se reintentan en el siguiente chequeo, hasta 3 veces.
+*   Una campaña con todas las recompensas al 100 % cuenta como terminada aunque el reclamo haya fallado, así el minero pasa a la siguiente.
 *   Si Kick te pide **vincular tu cuenta del juego** (por ejemplo una cuenta del publisher), el miner te avisa una vez y muestra el enlace. No puede vincularla por ti.
 *   Con `auto_claim: false` se te avisa cuando una recompensa está lista y la reclamas tú en kick.com.
 
@@ -396,7 +394,7 @@ Puedes sobrescribir todo el bloque **por cuenta**:
 
 Tanto `Telegram.drops_events` como `Discord.drops_events` aceptan estas claves (de forma independiente, todas `true` por defecto):
 
-`started`, `stopped`, `progress`, `priority_switch`, `reward_ready`, `reward_claimed`, `claim_unavailable`, `claim_needs_link`, `claim_failed`, `campaign_finished`, `no_pending`, `no_live_channel`, `category_changed`, `stream_restarted`, `refresh_failed`, `loop_error`, `progress_unavailable`, `global_no_category`, `wrong_category`.
+`started`, `stopped`, `progress`, `priority_switch`, `reward_ready`, `reward_claimed`, `claim_unavailable`, `claim_failed`, `campaign_finished`, `no_pending`, `no_live_channel`, `category_changed`, `stream_restarted`, `refresh_failed`, `loop_error`, `progress_unavailable`, `global_no_category`, `wrong_category`.
 
 `include_category_in_points` añade la categoría actual del stream a cada notificación de puntos. Los puntos obtenidos en un canal solo de drops se notifican con el mismo mensaje y se marcan como `Drops mining`.
 

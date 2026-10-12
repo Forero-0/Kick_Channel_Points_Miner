@@ -92,7 +92,6 @@ An asynchronous bot that automatically farms **channel points** and mines **drop
       "reward_ready": true,
       "reward_claimed": true,
       "claim_unavailable": true,
-      "claim_needs_link": true,
       "claim_failed": true,
       "campaign_finished": true,
       "no_pending": true,
@@ -143,7 +142,6 @@ An asynchronous bot that automatically farms **channel points** and mines **drop
     "campaigns": [],
     "games": [],
     "auto_claim": true,
-    "claim_retry_seconds": 1800,
     "check_interval": 300,
     "max_global_streamers": 24,
     "offline_checks_to_switch": 2,
@@ -369,7 +367,6 @@ Rules:
 | `campaigns` | Only mine these campaigns (id or name). **The order is the priority** and they rank above `games`. |
 | `games` | Only mine campaigns of these games. **The order is the priority.** |
 | `auto_claim` | `true` claims rewards automatically when they reach 100 %. `false` only reports them as ready. Default `false` in the code (`config.example.json` ships it as `true`). |
-| `claim_retry_seconds` | Wait before retrying a failed claim, for example an unlinked game account (default `1800`, minimum `300`). |
 | `check_interval` | Seconds between progress and status checks (default `300`, minimum `60`). |
 | `max_global_streamers` | For global campaigns, how many top live streamers of the game are considered (default `24`). |
 | `offline_checks_to_switch` | Consecutive "offline" checks before leaving a channel (default `2`). |
@@ -388,15 +385,15 @@ You can override the whole block **per account**:
 
 ### Claiming rewards
 
-*   Each reward is claimed once. A failure is retried only after `claim_retry_seconds`.
-*   If Kick asks you to **link your game account** (for example a publisher account), the miner tells you once and shows the link. It cannot link it for you.
+*   Each reward is claimed once. If Kick rejects the claim (any 4xx, e.g. `400 INVALID_CLAIM` because the game account is not linked) it is **not retried** and no link is shown or sent. Temporary failures (network error, HTTP 5xx/408/429) are retried on the next check, up to 3 times.
+*   A campaign whose rewards are all at 100 % counts as finished even if a claim failed, so the miner moves on to the next one.
 *   With `auto_claim: false` you are told when a reward is ready and you claim it on kick.com.
 
 ### Drops events
 
 Both `Telegram.drops_events` and `Discord.drops_events` accept these keys (independently, all `true` by default):
 
-`started`, `stopped`, `progress`, `priority_switch`, `reward_ready`, `reward_claimed`, `claim_unavailable`, `claim_needs_link`, `claim_failed`, `campaign_finished`, `no_pending`, `no_live_channel`, `category_changed`, `stream_restarted`, `refresh_failed`, `loop_error`, `progress_unavailable`, `global_no_category`, `wrong_category`.
+`started`, `stopped`, `progress`, `priority_switch`, `reward_ready`, `reward_claimed`, `claim_unavailable`, `claim_failed`, `campaign_finished`, `no_pending`, `no_live_channel`, `category_changed`, `stream_restarted`, `refresh_failed`, `loop_error`, `progress_unavailable`, `global_no_category`, `wrong_category`.
 
 `include_category_in_points` adds the current stream category to every points notification. Points earned on a drops-only channel are reported with the same message and marked `Drops mining`.
 

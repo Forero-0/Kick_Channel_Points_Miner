@@ -23,6 +23,10 @@ VERDICT_OK = "ok"
 VERDICT_RECONNECT = "reconnect"
 VERDICT_SWITCH = "switch"
 
+# Max claim attempts per reward when the failure is transient
+# (network error, HTTP 5xx/429). Account-not-linked is never retried.
+CLAIM_MAX_TRIES = 3
+
 
 @dataclass
 class DropCampaignTarget:
@@ -139,15 +143,17 @@ class DropsMiner:
         self._stop_cb: Optional[Callable] = None
         self._event_cb: Optional[Callable] = None
         # Claim bookkeeping (runtime only, Kick stays the source of truth).
-        #   _claimed_ok:   reward ids we claimed successfully this run
-        #   _claim_blocked: reward id -> retry-not-before (monotonic s)
-        #                   used so an unlinked game account or a
-        #                   transient failure doesn't retry every tick
-        self._claimed_ok: set = set()
-        self._claim_blocked: Dict[str, float] = {}
-        self._claim_retry_seconds = max(300, int(
-            drops_cfg.get("claim_retry_seconds", 1800)
-        ))
+        #   _claim_attempted: reward ids whose claim is FINAL this run
+        #                     (success, account not linked, or a definitive
+        #                     rejection). Never tried again.
+        #   _claim_tries:     reward id -> attempts spent on TRANSIENT
+        #                     failures (network error, HTTP 5xx/429); those
+        #                     are retried on the next sync, up to a limit.
+        #   _ready_notified:  reward ids already reported as ready when
+        #                     auto_claim is off (so it isn't repeated)
+        self._claim_attempted: set = set()
+        self._claim_tries: Dict[str, int] = {}
+        self._ready_notified: set = set()
         self._offline_strikes = 0
         self._no_live_reported = False
         self._no_pending_reported = False
@@ -302,11 +308,16 @@ class DropsMiner:
                 target.reward_lines = prog.get("rewards") or []
 
             # Done when Kick says the whole campaign is claimed, or when
-            # every reward we know about is claimed.
-            all_claimed = bool(target.reward_lines) and all(
-                r.get("claimed") for r in target.reward_lines
+            # every reward we know about is either claimed OR already at
+            # 100 %. A reward at 100 % that could not be claimed (for
+            # example an unlinked game account) must NOT keep the
+            # campaign "pending": watching more adds nothing, and it
+            # would block every other campaign.
+            all_settled = bool(target.reward_lines) and all(
+                r.get("claimed") or r.get("progress", 0) >= 1.0
+                for r in target.reward_lines
             )
-            target.done = (status == STATUS_CLAIMED) or all_claimed
+            target.done = (status == STATUS_CLAIMED) or all_settled
 
             new_targets[c["id"]] = target
 
@@ -516,29 +527,36 @@ class DropsMiner:
         """
         Claim every reward that reached 100% and is not claimed yet.
 
-        With `auto_claim` off it only reports the reward as ready. With it
-        on, it POSTs to Kick's claim endpoint once per reward:
+        With `auto_claim` off it only reports the reward as ready (once).
+        With it on, it POSTs to Kick's claim endpoint:
 
-          * success            -> remembered, never claimed twice.
-          * needs account link -> Kick returned a `connect_url` (e.g. the
-            Krafton account is not linked). Retrying is useless until the
-            user links it, so it is reported ONCE and retried only after
-            `claim_retry_seconds` (default 30 min).
-          * other failure      -> same back-off, so a bad moment doesn't
-            turn into a request every cycle.
+          * success             -> done, never claimed twice.
+          * definitive rejection (any 4xx / INVALID_CLAIM, e.g. the game
+            account is not linked, HTTP 400) -> final, NOT retried.
+            Logged without any link.
+          * transient failure (network error, HTTP 5xx/408/429) ->
+            retried on the next sync, at most CLAIM_MAX_TRIES in total.
         """
         claimable = [
             r for r in target.reward_lines
             if r.get("progress", 0) >= 1.0
             and not r.get("claimed")
             and r.get("id")
-            and r.get("id") not in self._claimed_ok
+            and r.get("id") not in self._claim_attempted
         ]
         if not claimable:
             return
 
         if not self.auto_claim:
-            names = ", ".join(str(r.get("name")) for r in claimable)
+            fresh = [
+                r for r in claimable
+                if str(r["id"]) not in self._ready_notified
+            ]
+            if not fresh:
+                return
+            names = ", ".join(str(r.get("name")) for r in fresh)
+            for r in fresh:
+                self._ready_notified.add(str(r["id"]))
             logger.success(t(
                 "drops_reward_ready_manual",
                 alias=self.alias, campaign=target.name, rewards=names,
@@ -548,21 +566,16 @@ class DropsMiner:
             )
             return
 
-        now = time.monotonic()
         for reward in claimable:
             rid = str(reward["id"])
             rname = str(reward.get("name") or rid)
-
-            if self._claim_blocked.get(rid, 0.0) > now:
-                continue
 
             result = await asyncio.to_thread(
                 self.api.claim_reward, rid, target.campaign_id,
             )
 
             if result.get("ok"):
-                self._claimed_ok.add(rid)
-                self._claim_blocked.pop(rid, None)
+                self._claim_attempted.add(rid)
                 # Reflect it locally right away instead of waiting for
                 # the next progress refresh.
                 reward["claimed"] = True
@@ -578,33 +591,32 @@ class DropsMiner:
                 await asyncio.sleep(random.uniform(1.5, 3.5))
                 continue
 
-            # Failure: back off. Report it only the first time for this
-            # reward, so a permanently unlinked account isn't spammed.
-            first_time = rid not in self._claim_blocked
-            self._claim_blocked[rid] = now + self._claim_retry_seconds
-
+            # Failure. Never shown or sent with a link. Whether to retry
+            # depends only on `transient`, not on the message below.
             if result.get("needs_link"):
-                logger.warning(t(
-                    "drops_claim_needs_link",
-                    alias=self.alias, campaign=target.name, reward=rname,
-                    url=result.get("connect_url") or "",
-                ))
-                if first_time:
-                    self._emit_event(
-                        "claim_needs_link", campaign=target.name,
-                        reward=rname, url=result.get("connect_url") or "",
-                    )
+                error = t("drops_claim_not_linked")
             else:
-                logger.warning(t(
-                    "drops_claim_failed",
-                    alias=self.alias, campaign=target.name, reward=rname,
-                    error=result.get("details") or result.get("type"),
+                error = str(result.get("details") or result.get("type"))
+            tries = self._claim_tries.get(rid, 0) + 1
+            self._claim_tries[rid] = tries
+            if result.get("transient") and tries < CLAIM_MAX_TRIES:
+                # Transient: leave it claimable, the next sync retries.
+                logger.info(t(
+                    "drops_claim_retry_later",
+                    alias=self.alias, reward=rname,
+                    tries=tries, limit=CLAIM_MAX_TRIES,
                 ))
-                if first_time:
-                    self._emit_event(
-                        "claim_failed", campaign=target.name, reward=rname,
-                        error=str(result.get("details") or ""),
-                    )
+                continue
+            self._claim_attempted.add(rid)           # final
+            logger.warning(t(
+                "drops_claim_failed",
+                alias=self.alias, campaign=target.name, reward=rname,
+                error=error,
+            ))
+            self._emit_event(
+                "claim_failed", campaign=target.name,
+                reward=rname, error=error,
+            )
 
     # --------------------------------------------------------------- loop
 

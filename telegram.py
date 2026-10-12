@@ -52,7 +52,6 @@ class TelegramBot:
             "reward_ready": True,
             "claim_unavailable": True,
             "reward_claimed": True,
-            "claim_needs_link": True,
             "claim_failed": True,
             "campaign_finished": True,
             "no_pending": True,

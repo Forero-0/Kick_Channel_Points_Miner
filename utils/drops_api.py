@@ -288,13 +288,19 @@ class DropsAPI:
 
           {"ok": True,  "claim_id": "...", "message": "Success"}
           {"ok": False, "type": "INVALID_CLAIM", "details": "...",
-           "connect_url": "https://accounts.krafton.com/...",
            "needs_link": True}          # account not linked to the game
           {"ok": False, "type": "HTTP_ERROR" | "REQUEST_ERROR", ...}
 
-        `needs_link` is True when Kick answers with a `connect_url`: the
-        reward is real but the user has not linked the game account, so
-        retrying every cycle is pointless until they do it by hand.
+        Failures also carry `transient`, decided ONLY by the kind of
+        failure (never by whether a link came back): True for network
+        errors and HTTP 5xx/408/429 (worth retrying); False for anything
+        Kick answered definitively, including every 4xx such as a
+        400 INVALID_CLAIM.
+
+        `needs_link` is only a hint for the message: True when Kick
+        includes a `connect_url` (the game account is not linked). It does
+        not decide whether to retry. The `connect_url` itself is
+        deliberately NOT returned, so it is never shown or sent anywhere.
         """
         url = f"{self.WEB_BASE}/drops/claim"
         payload = {"reward_id": reward_id, "campaign_id": campaign_id}
@@ -312,7 +318,7 @@ class DropsAPI:
             logger.error(t("drops_request_error", url=url, error=str(e)))
             return {
                 "ok": False, "type": "REQUEST_ERROR",
-                "details": str(e), "connect_url": None, "needs_link": False,
+                "details": str(e), "needs_link": False, "transient": True,
             }
 
         try:
@@ -334,13 +340,20 @@ class DropsAPI:
                 ) or "Success",
             }
 
-        connect_url = data.get("connect_url")
+        err_type = data.get("type") or "HTTP_ERROR"
+        details = str(data.get("details") or f"HTTP {resp.status_code}")
+        # An explicit INVALID_CLAIM is Kick's definitive "no", whatever
+        # the HTTP status; otherwise only server-side / rate-limit style
+        # statuses are worth retrying.
+        transient = err_type != "INVALID_CLAIM" and (
+            resp.status_code >= 500 or resp.status_code in (408, 429)
+        )
         return {
             "ok": False,
-            "type": data.get("type") or "HTTP_ERROR",
-            "details": data.get("details") or f"HTTP {resp.status_code}",
-            "connect_url": connect_url,
-            "needs_link": bool(connect_url),
+            "type": err_type,
+            "details": details,
+            "needs_link": bool(data.get("connect_url")),
+            "transient": transient,
             "status": resp.status_code,
         }
 

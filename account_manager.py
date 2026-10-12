@@ -918,12 +918,6 @@ class AccountWorker:
                 "drops_event_reward_claimed",
                 campaign=data.get("campaign"), reward=data.get("reward"),
             )
-        elif event == "claim_needs_link":
-            message = t(
-                "drops_event_claim_needs_link",
-                campaign=data.get("campaign"), reward=data.get("reward"),
-                url=data.get("url"),
-            )
         elif event == "claim_failed":
             message = t(
                 "drops_event_claim_failed",
