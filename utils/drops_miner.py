@@ -279,6 +279,8 @@ class DropsMiner:
                 continue
             if DropsAPI.is_expired(c):
                 continue
+            if not DropsAPI.is_started(c):
+                continue
             if not self._matches_filters(c):
                 continue
 

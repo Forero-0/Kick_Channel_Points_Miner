@@ -139,6 +139,22 @@ class DropsAPI:
             return False
         return ends <= datetime.now(timezone.utc)
 
+    @classmethod
+    def is_started(cls, campaign: dict) -> bool:
+        """
+        False when the campaign has not started yet (status "upcoming" or
+        `starts_at` in the future) or is already "expired". Unknown status
+        and unparseable dates are treated as started, so nothing is
+        silently skipped by mistake. Compared in UTC.
+        """
+        status = str(campaign.get("status") or "").lower()
+        if status in ("upcoming", "expired"):
+            return False
+        starts = cls.parse_iso(campaign.get("starts_at"))
+        if starts is not None and starts > datetime.now(timezone.utc):
+            return False
+        return True
+
     # ---------------------------------------------------------- campaigns
 
     def get_campaigns(self) -> Optional[List[dict]]:
