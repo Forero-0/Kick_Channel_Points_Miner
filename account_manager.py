@@ -126,6 +126,11 @@ class AccountWorker:
         self._drops_ws_task: Optional[asyncio.Task] = None
         self._drops_points_task: Optional[asyncio.Task] = None
         self._drops_points = {}
+        # True while a drops viewer is being opened/swapped. Without it
+        # there is a window (awaiting the ws token) in which neither a
+        # drops session nor the grace window exist yet, and a points
+        # rebalance could open a second viewer on a different channel.
+        self._drops_starting = False
 
         # --- Activity report (optional, OFF by default). Periodically
         # says what is currently being watched, its category, and WHY
@@ -751,6 +756,21 @@ class AccountWorker:
         the account never has two viewers and never watches a stream that
         isn't the campaign's.
         """
+        # Block points viewers for the whole start, before the first await.
+        self._drops_starting = True
+        try:
+            return await self._drops_start_watching_inner(
+                slug, stream_id, channel_id
+            )
+        finally:
+            self._drops_starting = False
+
+    async def _drops_start_watching_inner(
+        self,
+        slug: str,
+        stream_id: Optional[int],
+        channel_id: Optional[int],
+    ) -> bool:
         # Never keep two drops connections at once.
         await self._drops_stop_watching(slug)
 
@@ -885,7 +905,11 @@ class AccountWorker:
         """
         if not self._drops:
             return False
-        return self._drops.is_watching or self._drops.has_pending_work
+        return (
+            self._drops_starting
+            or self._drops.is_watching
+            or self._drops.has_pending_work
+        )
 
     def _notify_drops_event(self, event: str, data: dict):
         if event == "started":

@@ -42,7 +42,10 @@ class DropCampaignTarget:
     # Runtime state (never persisted: Kick is the source of truth)
     progress_units: int = 0
     done: bool = False
-    tried: List[str] = field(default_factory=list)
+    # slug -> monotonic time of its last failure (could not open the
+    # viewer connection, or the connection died). It only DEMOTES the
+    # channel for `retry_cooldown_seconds`; it never excludes it for good.
+    failed_at: Dict[str, float] = field(default_factory=dict)
     reward_lines: List[dict] = field(default_factory=list)
 
 
@@ -133,6 +136,13 @@ class DropsMiner:
             drops_cfg.get("points_grace_seconds", 600)
         ))
         self._last_active_at: float = 0.0   # monotonic, 0 = never
+
+        # A channel that failed (viewer could not open, or its connection
+        # died) is tried AFTER the healthy candidates for this long. After
+        # that it competes normally again. It is never banned.
+        self.retry_cooldown_seconds: int = max(0, int(
+            drops_cfg.get("retry_cooldown_seconds", 120)
+        ))
 
         self.api = DropsAPI(token, proxy=proxy)
 
@@ -302,7 +312,7 @@ class DropsMiner:
                 is_global=not c["channels"],
                 target_minutes=self._target_minutes(c["rewards"]),
                 channels=[ch["slug"] for ch in c["channels"]],
-                tried=prev.tried if prev else [],
+                failed_at=prev.failed_at if prev else {},
             )
 
             if prog:
@@ -409,7 +419,7 @@ class DropsMiner:
     ) -> Optional[dict]:
         """
         First live channel of the campaign that is still in the right
-        category, skipping the ones already tried in this cycle.
+        category. Channels that failed recently are tried last, not skipped.
         Returns {"slug", "stream_id", "channel_id"} or None.
         """
         candidates = await self._live_candidates(target)
@@ -420,15 +430,25 @@ class DropsMiner:
             slug: index
             for index, slug in enumerate(self.preferred_streamers)
         }
-        candidates.sort(key=lambda slug: priority.get(slug, len(priority)))
+        now = time.monotonic()
 
-        # Every candidate tried -> start a fresh cycle instead of
-        # dead-locking (same idea as `tried_channels` in the reference).
-        if all(c in target.tried or c == exclude for c in candidates):
-            target.tried.clear()
+        def recently_failed(slug: str) -> bool:
+            at = target.failed_at.get(slug)
+            return at is not None and (now - at) < self.retry_cooldown_seconds
+
+        # Healthy candidates first, channels that failed a moment ago
+        # last. Nothing is skipped for good: if the only live channel is
+        # the one that just failed, it is still tried (the old "tried"
+        # list made the miner ignore it until every OTHER channel had
+        # also been tried, i.e. practically forever).
+        candidates.sort(
+            key=lambda slug: (
+                recently_failed(slug), priority.get(slug, len(priority)),
+            )
+        )
 
         for slug in candidates:
-            if slug == exclude or slug in target.tried:
+            if slug == exclude:
                 continue
 
             state = await asyncio.to_thread(
@@ -479,10 +499,10 @@ class DropsMiner:
                 choice["slug"], choice["stream_id"], choice["channel_id"],
             )
         if not ok:
-            target.tried.append(choice["slug"])
+            target.failed_at[choice["slug"]] = time.monotonic()
             return False
 
-        target.tried.append(choice["slug"])
+        target.failed_at.pop(choice["slug"], None)
         self.session = DropsSession(
             slug=choice["slug"],
             campaign_id=target.campaign_id,
@@ -781,9 +801,8 @@ class DropsMiner:
                     choice["slug"], choice["stream_id"],
                     choice["channel_id"],
                 )
-            target.tried.append(choice["slug"])
-
             if not ok:
+                target.failed_at[choice["slug"]] = time.monotonic()
                 # The better channel could not be opened, so the old
                 # connection may already be gone. Restore what we had
                 # instead of leaving the account without drops.
@@ -806,6 +825,7 @@ class DropsMiner:
                 # tick retries. Avoids hammering a broken channel.
                 return False
 
+            target.failed_at.pop(choice["slug"], None)
             self.session = DropsSession(
                 slug=choice["slug"],
                 campaign_id=target.campaign_id,
@@ -865,11 +885,9 @@ class DropsMiner:
                     target = self.targets.get(self.session.campaign_id)
                     await self._end(t("drops_reason_restarted"))
                     if target:
-                        # `_begin` marks the channel as tried when it
-                        # starts; a healthy channel being reconnected
-                        # must be eligible again.
-                        if slug in target.tried:
-                            target.tried.remove(slug)
+                        # A healthy channel being reconnected must be
+                        # eligible again right away.
+                        target.failed_at.pop(slug, None)
                         if await self._begin(target):
                             return
                     if await self._choose_and_start(exclude=slug):
@@ -959,6 +977,11 @@ class DropsMiner:
             if not self.session or self.session.slug != slug:
                 return
             slug_now = self.session.slug
+            target = self.targets.get(self.session.campaign_id)
+            if target:
+                # Demote (not ban): other live channels go first, but this
+                # one is retried on the next ticks once the cooldown ends.
+                target.failed_at[slug_now] = time.monotonic()
             self.session = None
             self._last_active_at = time.monotonic()
             logger.warning(t(
