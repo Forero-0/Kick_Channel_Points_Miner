@@ -313,6 +313,8 @@
   "drops_global_no_category": "⚠️ [{alias}] Campaign '{campaign}' is global but has no category id, skipping it",
   "drops_wrong_category": "🎁 [{alias}] {streamer} is live but not in the campaign's game, skipping",
   "drops_category_changed": "🎁 [{alias}] {streamer} changed to another game, switching channel",
+  "drops_no_active_drop": "🎁 [{alias}] {streamer} has no active drops for this campaign, skipping",
+  "drops_drop_ended": "🎁 [{alias}] {streamer} no longer has active drops for this campaign, switching channel",
   "drops_stream_restarted": "🎁 [{alias}] {streamer} started a new stream, reconnecting",
   "drops_offline_strike": "🎁 [{alias}] {streamer} seems offline ({strikes}/{limit})",
   "drops_campaign_finished": "🎉 [{alias}] Drop campaign completed: {campaign}",

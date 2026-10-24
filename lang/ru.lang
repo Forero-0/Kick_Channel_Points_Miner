@@ -313,6 +313,8 @@
   "drops_global_no_category": "⚠️ [{alias}] Кампания '{campaign}' глобальная, но без id категории, пропускаю",
   "drops_wrong_category": "🎁 [{alias}] {streamer} в эфире, но не в игре кампании, пропускаю",
   "drops_category_changed": "🎁 [{alias}] {streamer} сменил игру, переключаю канал",
+  "drops_no_active_drop": "🎁 [{alias}] у {streamer} нет активных дропсов этой кампании, пропускаю",
+  "drops_drop_ended": "🎁 [{alias}] у {streamer} больше нет активных дропсов этой кампании, переключаю канал",
   "drops_stream_restarted": "🎁 [{alias}] {streamer} начал новый стрим, переподключаюсь",
   "drops_offline_strike": "🎁 [{alias}] {streamer}, похоже, оффлайн ({strikes}/{limit})",
   "drops_campaign_finished": "🎉 [{alias}] Кампания дропсов завершена: {campaign}",

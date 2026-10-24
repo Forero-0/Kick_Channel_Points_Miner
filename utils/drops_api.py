@@ -73,13 +73,16 @@ class DropsAPI:
                 return None
         return current
 
-    def _get_json(self, url: str, authenticated: bool = False):
+    def _get_json(
+        self, url: str, authenticated: bool = False,
+        extra_headers: Optional[dict] = None,
+    ):
         """
         GET `url` and return the parsed JSON, or None on any failure.
         The Authorization header is only attached when `authenticated`
         is True, so public endpoints never carry the token.
         """
-        headers = {}
+        headers = dict(extra_headers or {})
         if authenticated:
             headers["Authorization"] = f"Bearer {self.token}"
 
@@ -412,6 +415,40 @@ class DropsAPI:
             "category_id": category_id,
             "stream_id": livestream.get("id"),
             "channel_id": info.get("id"),
+        }
+
+    def get_channel_drop_ids(
+        self, channel_id, category_id
+    ) -> Optional[set]:
+        """
+        Ids of the campaigns that are ACTIVE right now for this channel
+        in this category (public endpoint, no token is sent).
+
+          GET /drops/campaigns/livestream?channel_id=..&category_id=..
+
+        Returns a set of campaign ids (empty set = the channel has no
+        active drops) or None when the request failed / the shape was
+        not understood. None means "unknown", never "no drops", so the
+        caller can avoid dropping a working channel because of one bad
+        request.
+        """
+        url = (
+            f"{self.WEB_BASE}/drops/campaigns/livestream"
+            f"?channel_id={channel_id}&category_id={category_id}"
+        )
+        data = self._get_json(
+            url, extra_headers={"x-app-platform": "web"},
+        )
+        if not isinstance(data, dict):
+            return None
+
+        raw_list = data.get("data")
+        if not isinstance(raw_list, list):
+            return None
+
+        return {
+            str(c["id"]) for c in raw_list
+            if isinstance(c, dict) and c.get("id")
         }
 
     def get_live_streamers(self, category_id, limit: int = 24) -> List[str]:

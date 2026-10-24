@@ -414,6 +414,25 @@ class DropsMiner:
             ))
         return list(target.channels)
 
+    async def _has_active_drop(
+        self, target: DropCampaignTarget, channel_id
+    ) -> bool:
+        """
+        Does Kick report this campaign as active for this channel right
+        now? Only a definitive answer ("the list does not contain the
+        campaign") returns False. Missing ids or a failed request are
+        "unknown" and return True, so a broken endpoint never stops all
+        mining.
+        """
+        if not target.category_id or not channel_id:
+            return True
+        ids = await asyncio.to_thread(
+            self.api.get_channel_drop_ids, channel_id, target.category_id,
+        )
+        if ids is None:
+            return True
+        return target.campaign_id in ids
+
     async def _pick_channel(
         self, target: DropCampaignTarget, exclude: Optional[str] = None
     ) -> Optional[dict]:
@@ -475,6 +494,16 @@ class DropsMiner:
                 )
                 continue
             if not state["channel_id"]:
+                continue
+            if not await self._has_active_drop(target, state["channel_id"]):
+                logger.debug(t(
+                    "drops_no_active_drop",
+                    alias=self.alias, streamer=slug,
+                ))
+                self._emit_event(
+                    "no_active_drop", streamer=slug,
+                    campaign=target.name,
+                )
                 continue
 
             return {
@@ -736,6 +765,19 @@ class DropsMiner:
             ))
             self._emit_event(
                 "category_changed", streamer=self.session.slug
+            )
+            return VERDICT_SWITCH
+
+        # The channel must still have this campaign active (the streamer
+        # may have disabled drops or the campaign may have ended).
+        if not await self._has_active_drop(target, state["channel_id"]):
+            logger.warning(t(
+                "drops_drop_ended",
+                alias=self.alias, streamer=self.session.slug,
+            ))
+            self._emit_event(
+                "no_active_drop", streamer=self.session.slug,
+                campaign=target.name,
             )
             return VERDICT_SWITCH
 

@@ -313,6 +313,8 @@
   "drops_global_no_category": "⚠️ [{alias}] La campaña '{campaign}' es global pero no tiene id de categoría, se omite",
   "drops_wrong_category": "🎁 [{alias}] {streamer} está en vivo pero no en el juego de la campaña, se omite",
   "drops_category_changed": "🎁 [{alias}] {streamer} cambió a otro juego, cambiando de canal",
+  "drops_no_active_drop": "🎁 [{alias}] {streamer} no tiene drops activos de esta campaña, se omite",
+  "drops_drop_ended": "🎁 [{alias}] {streamer} ya no tiene drops activos de esta campaña, cambiando de canal",
   "drops_stream_restarted": "🎁 [{alias}] {streamer} inició un stream nuevo, reconectando",
   "drops_offline_strike": "🎁 [{alias}] {streamer} parece estar offline ({strikes}/{limit})",
   "drops_campaign_finished": "🎉 [{alias}] Campaña de drops completada: {campaign}",
