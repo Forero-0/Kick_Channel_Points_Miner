@@ -1010,56 +1010,68 @@ class AccountWorker:
 
     def _notify_daily_reward(self, outcome: dict):
         """
-        Sends the Discord / Telegram notifications for a claimed daily
-        reward. `outcome` is the "claimed": True branch returned by
-        DailyChallenge.check_and_claim().
+        Sends the Discord / Telegram notifications for the daily rewards
+        claimed in one check. `outcome` is the dict returned by
+        DailyChallenge.check_and_claim(); it can hold several claims at
+        once (e.g. "Daily Reward" + a seasonal event), and one
+        notification is sent per claim, labelled with the challenge name.
 
         Whether each channel actually sends anything (and whether it
         includes the reward card photo) is decided by that channel's own
         notifier (Telegram.notify_daily_reward / send_daily_reward_card,
-        Discord.notify_daily_reward / send_daily_reward_card) — this only forwards
-        the event to both.
+        Discord.notify_daily_reward / send_daily_reward_card) - this only
+        forwards each event to both.
         """
-        result = outcome.get("result") or {}
-        consolation = result.get("consolation")
-        winner = result.get("winner", {}) or {}
+        claims = outcome.get("claims") or []
+        multiple = len(claims) > 1
 
-        if consolation:
-            already_owned = True
-            rarity = None
-            card_url = None
-            watch_time_minutes = consolation.get("watch_time_minutes")
-            logger.success(t(
-                "daily_challenge_consolation",
-                alias=self.alias, minutes=watch_time_minutes,
-            ))
-        else:
-            already_owned = False
-            rarity = winner.get("rarity", "unknown")
-            card_url = winner.get("card_url")
-            watch_time_minutes = None
-            logger.success(t(
-                "daily_challenge_claimed",
-                alias=self.alias, rarity=t_rarity(rarity),
-            ))
+        for claim in claims:
+            result = claim.get("result") or {}
+            name = claim.get("name") or ""
+            consolation = result.get("consolation")
+            winner = result.get("winner", {}) or {}
 
-        if self._discord:
-            self._discord.send_daily_reward_claimed(
-                self.alias,
-                rarity=rarity,
-                card_url=card_url,
-                watch_time_minutes=watch_time_minutes,
-                already_owned=already_owned,
+            # Only decorate the alias when it helps tell rewards apart.
+            label = (
+                f"{self.alias} · {name}" if (multiple and name) else self.alias
             )
 
-        if self._tg_bot:
-            self._tg_bot.send_daily_reward_claimed(
-                self.alias,
-                rarity=rarity,
-                card_url=card_url,
-                watch_time_minutes=watch_time_minutes,
-                already_owned=already_owned,
-            )
+            if consolation:
+                already_owned = True
+                rarity = None
+                card_url = None
+                watch_time_minutes = consolation.get("watch_time_minutes")
+                logger.success(t(
+                    "daily_challenge_consolation",
+                    alias=label, minutes=watch_time_minutes,
+                ))
+            else:
+                already_owned = False
+                rarity = winner.get("rarity", "unknown")
+                card_url = winner.get("card_url")
+                watch_time_minutes = None
+                logger.success(t(
+                    "daily_challenge_claimed",
+                    alias=label, rarity=t_rarity(rarity),
+                ))
+
+            if self._discord:
+                self._discord.send_daily_reward_claimed(
+                    label,
+                    rarity=rarity,
+                    card_url=card_url,
+                    watch_time_minutes=watch_time_minutes,
+                    already_owned=already_owned,
+                )
+
+            if self._tg_bot:
+                self._tg_bot.send_daily_reward_claimed(
+                    label,
+                    rarity=rarity,
+                    card_url=card_url,
+                    watch_time_minutes=watch_time_minutes,
+                    already_owned=already_owned,
+                )
 
     async def _daily_challenge_loop(self):
         """
@@ -1173,12 +1185,30 @@ class AccountWorker:
                 if need_first_check or reached_estimate:
                     outcome = checker.check_and_claim(self.token, self.alias)
 
+                    # Kick can run several challenges at once (Daily Reward
+                    # + seasonal events). Notify every claim made now, then
+                    # decide what to do about whatever is still pending.
                     if outcome.get("claimed"):
                         self._notify_daily_reward(outcome)
-                        window_ends_at = outcome.get("window_ends_at")
+                        # The remaining-time estimate belonged to the
+                        # challenge(s) we just claimed; recompute it from
+                        # the ones still pending.
                         remaining_seconds = None
                         accumulated_seconds = 0.0
+                        window_ends_at = outcome.get("window_ends_at")
+
+                    if outcome.get("claimed") and not (
+                        outcome.get("in_progress")
+                        or outcome.get("claim_failed")
+                    ):
+                        # Everything claimed -> wait for the next window.
                         sleep_until_next_window_check = True
+
+                    elif outcome.get("claimed") and outcome.get(
+                        "claim_failed"
+                    ) and not outcome.get("in_progress"):
+                        # Claimed some, another failed: retry shortly.
+                        await asyncio.sleep(60)
 
                     elif outcome.get("already_claimed"):
                         window_ends_at = outcome.get("window_ends_at")

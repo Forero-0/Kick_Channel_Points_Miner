@@ -159,89 +159,105 @@ class DailyChallenge:
 
     def check_and_claim(self, token: str, alias: str = "") -> dict:
         """
-        High-level helper: fetches the current challenges, and if any is
-        ready to claim (status == READY_TO_CLAIM_STATUS), claims it.
+        High-level helper: fetches ALL current challenges (Kick can run
+        several at once, e.g. the permanent "Daily Reward" plus a seasonal
+        event like "Trick or Treat"), claims every one that is ready and
+        reports what is still pending.
 
-        Returns a dict describing what happened, always with a "claimed"
-        bool key, so the caller (account_manager) can decide whether/how
-        to notify Discord / Telegram, and how long to wait before asking
-        the API again:
+        Every challenge is evaluated independently: one being claimed or
+        in progress never hides the others.
 
-          {
-            "claimed": False,
-            "already_claimed": True/False,
-            "window_ends_at": datetime | None,  # to know when the next
-                                                  # challenge window starts
-          }
-
-        or, when still in progress:
+        Returned dict (always has all keys):
 
           {
-            "claimed": False,
-            "already_claimed": False,
+            "claimed": bool,            # at least one challenge claimed now
+            "claims": [                 # one entry per successful claim
+                {"id": str, "name": str, "result": <raw claim payload>},
+            ],
+            "claim_failed": bool,       # a claimable challenge failed to claim
+            "already_claimed": bool,    # challenges exist and ALL are claimed
+            "in_progress": bool,        # at least one is still short of goal
+            "remaining_minutes": int,   # MIN remaining among in-progress ones
             "window_ends_at": datetime | None,
-            "in_progress": True,
-            "remaining_minutes": int,   # threshold - progress, so the
-                                         # caller knows how much watch
-                                         # time is still needed before
-                                         # checking again
-          }
-
-        or, when something was actually claimed:
-
-          {
-            "claimed": True,
-            "result": <raw "data" payload from the claim endpoint>,
+                # earliest window end among the relevant challenges: the
+                # in-progress ones if any, otherwise all of them.
           }
         """
+        outcome = {
+            "claimed": False,
+            "claims": [],
+            "claim_failed": False,
+            "already_claimed": False,
+            "in_progress": False,
+            "remaining_minutes": 0,
+            "window_ends_at": None,
+        }
+
         challenges = self.get_challenges(token)
         if not challenges:
             logger.debug(t("daily_challenge_none_found", alias=alias))
-            return {"claimed": False, "already_claimed": False, "window_ends_at": None}
+            return outcome
+
+        all_windows = []
+        pending_windows = []
+        remaining_list = []
 
         for challenge in challenges:
             status = challenge.get("status")
             challenge_id = challenge.get("id")
+            name = challenge.get("name") or ""
             condition = challenge.get("condition") or {}
-            progress = condition.get("progress", 0)
-            threshold = condition.get("threshold", 0)
+            progress = condition.get("progress", 0) or 0
+            threshold = condition.get("threshold", 0) or 0
             window = challenge.get("window", {}) or {}
             window_ends_at = self._parse_iso(window.get("ends_at"))
+
+            if window_ends_at is not None:
+                all_windows.append(window_ends_at)
 
             if status == "claimed":
                 logger.debug(t(
                     "daily_challenge_already_claimed", alias=alias,
                 ))
-                return {
-                    "claimed": False,
-                    "already_claimed": True,
-                    "window_ends_at": window_ends_at,
-                }
-
-            if status != self.READY_TO_CLAIM_STATUS:
-                remaining = max(threshold - progress, 0)
-                return {
-                    "claimed": False,
-                    "already_claimed": False,
-                    "window_ends_at": window_ends_at,
-                    "in_progress": True,
-                    "remaining_minutes": remaining,
-                }
-
-            if not challenge_id:
                 continue
 
-            result = self.claim(token, challenge_id)
-            if result is None:
-                logger.error(t(
-                    "daily_challenge_claim_no_result", alias=alias,
-                ))
+            if status == self.READY_TO_CLAIM_STATUS and challenge_id:
+                result = self.claim(token, challenge_id)
+                if result is None:
+                    logger.error(t(
+                        "daily_challenge_claim_no_result", alias=alias,
+                    ))
+                    outcome["claim_failed"] = True
+                    continue
+                outcome["claims"].append({
+                    "id": challenge_id,
+                    "name": name,
+                    "result": result,
+                })
                 continue
 
-            return {
-                "claimed": True,
-                "result": result,
-                "window_ends_at": window_ends_at,
-            }
+            # Anything else (in_progress, unknown status): still pending.
+            remaining_list.append(max(threshold - progress, 0))
+            if window_ends_at is not None:
+                pending_windows.append(window_ends_at)
 
-        return {"claimed": False, "already_claimed": False, "window_ends_at": None}
+        outcome["claimed"] = bool(outcome["claims"])
+
+        if remaining_list:
+            outcome["in_progress"] = True
+            # A failed claim must be retried soon, not after the other
+            # challenges' remaining watch time.
+            outcome["remaining_minutes"] = (
+                0 if outcome["claim_failed"] else min(remaining_list)
+            )
+
+        if (
+            not remaining_list
+            and not outcome["claim_failed"]
+        ):
+            outcome["already_claimed"] = not outcome["claimed"]
+
+        relevant = pending_windows or all_windows
+        outcome["window_ends_at"] = min(relevant) if relevant else None
+
+        return outcome
