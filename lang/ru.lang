@@ -350,6 +350,7 @@
   ,"drops_event_reward_claimed": "Награда получена в {campaign}: {reward}"
   ,"drops_event_claim_failed": "Не удалось получить {reward} ({campaign}): {error}"
   ,"drops_priority_switch": "🎁 [{alias}] Доступен более приоритетный вариант, переключаюсь с '{old}' на '{new}' на {streamer}"
+  ,"drops_preferred_switch": "🎁 [{alias}] Доступен предпочитаемый стример, переключаюсь с {old} на {streamer} ({campaign})"
   ,"drops_priority_switch_failed": "⚠️ [{alias}] Не удалось переключиться на более приоритетную '{campaign}' на {streamer}, остаюсь на текущей"
   ,"drops_reason_priority": "доступна кампания с более высоким приоритетом"
   ,"drops_event_priority_switch": "Переключение на более высокий приоритет: {campaign} на {streamer} (было {old})"

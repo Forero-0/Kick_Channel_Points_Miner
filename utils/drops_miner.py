@@ -434,14 +434,18 @@ class DropsMiner:
         return target.campaign_id in ids
 
     async def _pick_channel(
-        self, target: DropCampaignTarget, exclude: Optional[str] = None
+        self, target: DropCampaignTarget, exclude: Optional[str] = None,
+        only: Optional[set] = None,
     ) -> Optional[dict]:
         """
         First live channel of the campaign that is still in the right
         category. Channels that failed recently are tried last, not skipped.
+        When `only` is given, just those slugs are considered.
         Returns {"slug", "stream_id", "channel_id"} or None.
         """
         candidates = await self._live_candidates(target)
+        if only is not None:
+            candidates = [c for c in candidates if c in only]
         if not candidates:
             return None
 
@@ -892,6 +896,80 @@ class DropsMiner:
 
         return False
 
+    async def _maybe_prefer_streamer(self) -> bool:
+        """
+        While watching a healthy channel of a campaign, check whether a
+        streamer from the user's list that ranks BEFORE the current one
+        is now eligible (live, right category, drop active) for the SAME
+        campaign, and switch to it if so.
+
+        `_maybe_preempt` only compares campaigns, so without this the
+        miner would stay on a non-preferred streamer until it dropped.
+        """
+        if not self.session or not self.preferred_streamers:
+            return False
+        current = self.targets.get(self.session.campaign_id)
+        if current is None:
+            return False
+
+        rank = {s: i for i, s in enumerate(self.preferred_streamers)}
+        cur_rank = rank.get(self.session.slug, len(rank))
+        better = set(self.preferred_streamers[:cur_rank])
+        if not better:
+            return False
+
+        choice = await self._pick_channel(
+            current, exclude=self.session.slug, only=better,
+        )
+        if not choice:
+            return False
+
+        old_session = self.session
+        ok = False
+        if self._start_cb:
+            ok = await self._start_cb(
+                choice["slug"], choice["stream_id"], choice["channel_id"],
+            )
+        if not ok:
+            current.failed_at[choice["slug"]] = time.monotonic()
+            logger.warning(t(
+                "drops_priority_switch_failed",
+                alias=self.alias, campaign=current.name,
+                streamer=choice["slug"],
+            ))
+            if self._start_cb:
+                restored = await self._start_cb(
+                    old_session.slug, old_session.stream_id,
+                    old_session.channel_id,
+                )
+                if not restored:
+                    self.session = None
+                    self._last_active_at = time.monotonic()
+            return False
+
+        current.failed_at.pop(choice["slug"], None)
+        self.session = DropsSession(
+            slug=choice["slug"],
+            campaign_id=current.campaign_id,
+            stream_id=choice["stream_id"],
+            channel_id=choice["channel_id"],
+        )
+        self._offline_strikes = 0
+        self._no_live_reported = False
+        self._last_active_at = time.monotonic()
+
+        logger.success(t(
+            "drops_preferred_switch",
+            alias=self.alias, old=old_session.slug,
+            streamer=choice["slug"], campaign=current.name,
+        ))
+        self._emit_event(
+            "priority_switch", old=old_session.slug,
+            campaign=current.name, streamer=choice["slug"],
+            game=current.game,
+        )
+        return True
+
     async def tick(self):
         """One decision cycle. Safe to call repeatedly."""
         async with self._lock:
@@ -917,7 +995,9 @@ class DropsMiner:
                     # picked it (its streamer just went live, ...). If so,
                     # move to it right away instead of waiting for the
                     # current one to finish.
-                    await self._maybe_preempt(pending)
+                    if await self._maybe_preempt(pending):
+                        return
+                    await self._maybe_prefer_streamer()
                     return
 
                 if verdict == VERDICT_RECONNECT:
